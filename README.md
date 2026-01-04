@@ -1,0 +1,2 @@
+# Substratum
+Substratum is a rust packaged designed for the dubious python library. Dubious is a project with the personal constraint that no libraries can be used other than numpy. Substratum is my attempt to rewrite some of numpy's features in hopes that it can eventually replace numpy as dubious's lone dependency. I also intend to expand Substratum to include more features, although it is not intended to be a numpy replacement.
