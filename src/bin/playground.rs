@@ -1,5 +1,7 @@
 use substratum::{NdArray, Shape};
+use substratum::random::Generator;
 
+//cargo run --bin playground
 fn main() {
     println!("=== Basic Array Creation ===");
     
@@ -85,4 +87,31 @@ fn main() {
     println!("a: {:?}", a.as_slice());
     println!("b: {:?}", b.as_slice());
     println!("(a + b) * 2 - 1: {:?}", result.as_slice());
+
+    println!("\n=== Random Generation ===");
+    
+    // Deterministic seeding
+    let mut rng = Generator::from_seed(42);
+    
+    let uniform01 = rng.standard_uniform(Shape::d2(2, 3));
+    println!("standard_uniform (2x3): {:?}", uniform01.as_slice());
+    
+    let uniform_range = rng.uniform(5.0, 10.0, Shape::d1(5));
+    println!("uniform [5, 10) (5,): {:?}", uniform_range.as_slice());
+    
+    let integers = rng.randint(-10, 10, Shape::d2(2, 4));
+    println!("randint [-10, 10) (2x4): {:?}", integers.as_slice());
+    
+    // Verify determinism
+    println!("\n=== Determinism Check ===");
+    
+    let mut rng1 = Generator::from_seed(12345);
+    let mut rng2 = Generator::from_seed(12345);
+    
+    let arr1 = rng1.standard_uniform(Shape::d1(5));
+    let arr2 = rng2.standard_uniform(Shape::d1(5));
+    
+    println!("rng1 output: {:?}", arr1.as_slice());
+    println!("rng2 output: {:?}", arr2.as_slice());
+    println!("identical: {}", arr1.as_slice() == arr2.as_slice());
 }
