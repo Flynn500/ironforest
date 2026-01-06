@@ -68,14 +68,14 @@ impl Generator {
     pub fn uniform(&mut self, low: f64, high: f64, shape: Shape) -> NdArray<f64>{
         assert!(low < high, "low must be less than high");
 
-        let range: f64 = (high - low);
+        let range: f64 = high - low;
         let data: Vec<f64> = (0..shape.size())
             .map(|_| low + (self.next_f64() * range))
             .collect();
 
         NdArray::from_vec(shape, data)
     }
- 
+
     pub fn standard_uniform(&mut self, shape: Shape) -> NdArray<f64> {
         let data: Vec<f64> = (0..shape.size())
             .map(|_| self.next_f64())
@@ -83,11 +83,94 @@ impl Generator {
         
         NdArray::from_vec(shape, data)
     }
+ 
+    pub fn standard_normal(&mut self, shape: Shape) -> NdArray<f64> {
+        let pi= std::f64::consts::PI;
+        let mut data= Vec::with_capacity(shape.size());
+
+        for _ in 0..(shape.size() / 2){
+            let rand1 = self.next_f64();
+            let rand2 = self.next_f64();
+            let r = f64::sqrt(-2.0 * f64::ln(rand1));
+            let z0 = r * f64::sin(2.0 * pi * rand2);
+            let z1 = r * f64::cos(2.0 * pi * rand2);
+            data.push(z0);
+            data.push(z1);
+        }
+        if shape.size() % 2 == 1 {
+            let rand1 = self.next_f64();
+            let rand2 = self.next_f64();
+            let z0 = f64::sqrt(-2.0 * f64::ln(rand1)) * f64::sin(2.0 * pi * rand2);
+            data.push(z0);
+        }
+
+        NdArray::from_vec(shape, data)
+    }
+
+    fn sample_standard_normal_single(&mut self) -> f64 {
+        let u1 = self.next_f64();
+        let u2 = self.next_f64();
+        (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos()
+    }
+
+    pub fn normal(&mut self, mu: f64, sigma: f64, shape: Shape) -> NdArray<f64> {
+        let z = self.standard_normal(shape);
+        mu + sigma * z
+    }
+
+    pub fn lognormal(&mut self, mu: f64, sigma: f64, shape: Shape) -> NdArray<f64> {
+        let z = self.normal(mu, sigma, shape);
+        z.sqrt()
+    }
+
+    fn sample_gamma_single(&mut self, alpha: f64) -> f64 {
+        if alpha < 1.0 {
+            return self.sample_gamma_single(alpha + 1.0) * self.next_f64().powf(1.0 / alpha);
+        }
+        
+        let d = alpha - 1.0 / 3.0;
+        let c = 1.0 / (9.0 * d).sqrt();
+        
+        loop {
+            let mut x;
+            let mut v;
+
+            loop {
+                x = self.sample_standard_normal_single();
+                v = 1.0 + c * x;
+                if v > 0.0 {
+                    break;
+                }
+            }
+            
+            v = v * v * v;
+            let u = self.next_f64();
+
+            if u < 1.0 - 0.0331 * x * x * x * x {
+                return d * v;
+            }
+            
+            if u.ln() < 0.5 * x * x + d * (1.0 - v + v.ln()) {
+                return d * v;
+            }
+        }
+    }
+
+    pub fn gamma(&mut self, shape_param: f64, scale: f64, shape: Shape) -> NdArray<f64> {
+        assert!(shape_param > 0.0, "shape parameter must be positive");
+        assert!(scale > 0.0, "scale must be positive");
+        
+        let data: Vec<f64> = (0..shape.size())
+            .map(|_| self.sample_gamma_single(shape_param) * scale)
+            .collect();
+        
+        NdArray::from_vec(shape, data)
+    }
 }
 
 mod tests {
+    #[allow(dead_code)]
     use super::*;
-    use crate::array::shape::Shape;
 
     #[test]
     fn deterministic_from_seed() {
@@ -144,5 +227,81 @@ mod tests {
         for &val in arr.as_slice() {
             assert!(val >= -10 && val < 10);
         }
+    }
+
+    #[allow(dead_code)]
+    fn mean(data: &[f64]) -> f64 {
+        data.iter().sum::<f64>() / data.len() as f64
+    }
+
+    #[allow(dead_code)]
+    fn variance(data: &[f64], mean: f64) -> f64 {
+        data.iter()
+            .map(|x| (x - mean).powi(2))
+            .sum::<f64>() / data.len() as f64
+    }
+    
+    #[test]
+    fn test_standard_normal_moments() {
+        let mut rng = Generator::new();
+        let samples = rng.standard_normal(Shape::new(vec![100000]));
+        let data = samples.as_slice();
+        
+        let sample_mean = mean(data);
+        let sample_var = variance(data, sample_mean);
+        
+        assert!((sample_mean).abs() < 0.01, "Mean should be ~0, got {}", sample_mean);
+        assert!((sample_var - 1.0).abs() < 0.02, "Variance should be ~1, got {}", sample_var);
+    }
+    
+    #[test]
+    fn test_normal_moments() {
+        let mut rng = Generator::new();
+        let mu = 5.0;
+        let sigma = 2.0;
+        let samples = rng.normal(mu, sigma, Shape::new(vec![100000]));
+        let data = samples.as_slice();
+        
+        let sample_mean = mean(data);
+        let sample_var = variance(data, sample_mean);
+        
+        assert!((sample_mean - mu).abs() < 0.02, "Mean should be ~{}, got {}", mu, sample_mean);
+        assert!((sample_var - sigma * sigma).abs() < 0.05, 
+                "Variance should be ~{}, got {}", sigma * sigma, sample_var);
+    }
+
+    #[test]
+    fn test_gamma_moments() {
+        let mut rng = Generator::new();
+        let shape_param = 2.0;
+        let scale = 3.0;
+        let samples = rng.gamma(shape_param, scale, Shape::new(vec![100000]));
+        let data = samples.as_slice();
+        
+        let sample_mean = mean(data);
+        let sample_var = variance(data, sample_mean);
+        
+        let expected_mean = shape_param * scale;  // 6.0
+        let expected_var = shape_param * scale * scale;  // 18.0
+        
+        assert!((sample_mean - expected_mean).abs() < 0.1, 
+                "Mean should be ~{}, got {}", expected_mean, sample_mean);
+        assert!((sample_var - expected_var).abs() < 0.3,
+                "Variance should be ~{}, got {}", expected_var, sample_var);
+    }
+
+    #[test]
+    fn test_gamma_shape_less_than_one() {
+        let mut rng = Generator::new();
+        let shape_param = 0.5;
+        let scale = 1.0;
+        let samples = rng.gamma(shape_param, scale, Shape::new(vec![50000]));
+        let data = samples.as_slice();
+        
+        let sample_mean = mean(data);
+        let expected_mean = shape_param * scale;
+        
+        assert!((sample_mean - expected_mean).abs() < 0.02,
+                "Mean should be ~{}, got {}", expected_mean, sample_mean);
     }
 }
