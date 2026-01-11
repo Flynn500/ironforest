@@ -1,0 +1,8 @@
+C:\Users\Flynn Wilson\Documents\RustProjects\substratum\target\debug\build\target-lexicon-21f55069b924e8c2\build_script_build-21f55069b924e8c2.exe: C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\build.rs C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\src/data_model.rs C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\src/triple.rs C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\src/targets.rs
+
+C:\Users\Flynn Wilson\Documents\RustProjects\substratum\target\debug\build\target-lexicon-21f55069b924e8c2\build_script_build-21f55069b924e8c2.d: C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\build.rs C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\src/data_model.rs C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\src/triple.rs C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\src/targets.rs
+
+C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\build.rs:
+C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\src/data_model.rs:
+C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\src/triple.rs:
+C:\Users\Flynn\ Wilson\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\target-lexicon-0.13.4\src/targets.rs:

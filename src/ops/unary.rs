@@ -96,6 +96,24 @@ impl<T: Float> NdArray<T> {
     pub fn into_powf(self, n: T) -> Self { map_inplace(self, |x| x.powf(n)) }
 }
 
+impl<T: PartialOrd + Copy> NdArray<T> {
+    pub fn clip(&self, min: T, max: T) -> Self {
+        self.map(|x| {
+            if x < min { min }
+            else if x > max { max }
+            else { x }
+        })
+    }
+
+    pub fn into_clip(self, min: T, max: T) -> Self {
+        map_inplace(self, |x| {
+            if x < min { min }
+            else if x > max { max }
+            else { x }
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,7 +183,40 @@ mod tests {
     fn abs_mixed_signs() {
         let a = NdArray::from_vec(Shape::d1(4), vec![-2.5, 3.5, -1.0, 0.0]);
         let b = a.abs();
-        
+
         assert_eq!(b.as_slice(), &[2.5, 3.5, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn clip_f64() {
+        let a = NdArray::from_vec(Shape::d1(5), vec![-2.0, 0.5, 1.5, 3.0, 5.0]);
+        let b = a.clip(0.0, 2.0);
+
+        assert_eq!(b.as_slice(), &[0.0, 0.5, 1.5, 2.0, 2.0]);
+    }
+
+    #[test]
+    fn clip_integers() {
+        let a = NdArray::from_vec(Shape::d1(5), vec![-10, 0, 5, 10, 20]);
+        let b = a.clip(0, 10);
+
+        assert_eq!(b.as_slice(), &[0, 0, 5, 10, 10]);
+    }
+
+    #[test]
+    fn clip_preserves_shape() {
+        let a = NdArray::from_vec(Shape::d2(2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let b = a.clip(2.0, 5.0);
+
+        assert_eq!(b.shape().dims(), &[2, 3]);
+        assert_eq!(b.as_slice(), &[2.0, 2.0, 3.0, 4.0, 5.0, 5.0]);
+    }
+
+    #[test]
+    fn into_clip_inplace() {
+        let a = NdArray::from_vec(Shape::d1(4), vec![0.0, 1.0, 2.0, 3.0]);
+        let b = a.into_clip(0.5, 2.5);
+
+        assert_eq!(b.as_slice(), &[0.5, 1.0, 2.0, 2.5]);
     }
 }

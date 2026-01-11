@@ -3,4 +3,13 @@ name = "substratum"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "substratum"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "playground"
+path = "src/bin/playground.rs"
+
 [dependencies]
+pyo3 = "0.27.2"
