@@ -58,9 +58,17 @@ def test_generator():
     ints = gen.randint(0, 10, [2, 3])
     print(f"Random ints [0, 10): {ints}")
 
+def test_matmul():
+    print("\n\nTesting mat mul:")
+    arr1 = ss.Array([2, 2], [1.0, 2.0, 3.0, 4.0])
+    arr2 = ss.Array([2, 2], [2.0, 3.0, 5.0, 6.0])
+    arr3 = arr1 @ arr2
+    print(f"output: {arr3.tolist()}")
+
 if __name__ == "__main__":
     test_array_creation()
     test_operations()
     test_math_functions()
     test_generator()
+    test_matmul()
     print("\n\nAll tests passed! ✓")

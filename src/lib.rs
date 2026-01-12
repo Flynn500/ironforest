@@ -163,6 +163,26 @@ impl PyArray {
         PyArray { inner: -&self.inner }
     }
 
+    fn __matmul__(&self, other: &PyArray) -> Self {
+        PyArray { inner: self.inner.matmul(&other.inner) }
+    }
+
+    fn matmul(&self, other: &PyArray) -> Self {
+        PyArray { inner: self.inner.matmul(&other.inner) }
+    }
+
+    fn dot(&self, other: &PyArray) -> Self {
+        PyArray { inner: self.inner.dot(&other.inner) }
+    }
+
+    fn transpose(&self) -> Self {
+        PyArray { inner: self.inner.transpose() }
+    }
+
+    fn t(&self) -> Self {
+        PyArray { inner: self.inner.t() }
+    }
+
     fn __repr__(&self) -> String {
         format!("Array(shape={:?}, data={:?})",
             self.inner.shape().dims(),

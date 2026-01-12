@@ -45,6 +45,35 @@ class Array:
     def diagonal(self, k: int | None = None) -> Array:
         """Extract the k-th diagonal from a 2D array."""
         ...
+    
+    def transpose(self) -> Array:
+        """Transpose a 2D matrix."""
+        ...
+
+    def t(self) -> Array:
+        """Transpose (alias for transpose())."""
+        ...
+
+    def matmul(self, other: Array) -> Array:
+        """Matrix multiplication."""
+        ...
+
+    def dot(self, other: Array) -> Array:
+        """Dot/matrix product."""
+        ...
+    
+    def cholesky(self) -> Array:
+        """Compute Cholesky decomposition.
+        
+        Raises:
+            ValueError: If matrix is not square or not positive-definite.
+        """
+        ...
+
+    def __matmul__(self, other: Array) -> Array:
+        """Matrix multiplication operator (@)."""
+        ...
+
 
     def sin(self) -> Array: ...
     def cos(self) -> Array: ...
