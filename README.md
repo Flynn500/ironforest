@@ -53,7 +53,7 @@ import substratum as ss
 a = ss.Array([2, 2], [1.0, 2.0, 3.0, 4.0])
 b = ss.Array([2, 2], [5.0, 6.0, 7.0, 8.0])
 
-print(f"a + b = {(a @ b).tolist()}")
+print(f"a @ b = {(a @ b).tolist()}")
 ```
 Output: 
-`a + b = [19.0, 22.0, 43.0, 50.0]`
+`a @ b = [19.0, 22.0, 43.0, 50.0]`
