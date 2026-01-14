@@ -44,7 +44,7 @@ def test_generator():
     """Test random number generation"""
     print("\n\nTesting random generation...")
     
-    gen = ss.Generator.from_seed(42)
+    gen = ss.random.Generator.from_seed(42)
     
     # Uniform random
     uniform = gen.uniform(0.0, 1.0, [2, 3])

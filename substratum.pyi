@@ -2,6 +2,229 @@
 
 from typing import Iterator, List, Sequence, Tuple, overload
 
+class linalg:
+    """Linear algebra functions."""
+
+    @staticmethod
+    def matmul(a: Array, b: Array) -> Array:
+        """Matrix multiplication."""
+        ...
+
+    @staticmethod
+    def dot(a: Array, b: Array) -> Array:
+        """Dot/matrix product."""
+        ...
+
+    @staticmethod
+    def transpose(a: Array) -> Array:
+        """Transpose a 2D matrix."""
+        ...
+
+    @staticmethod
+    def cholesky(a: Array) -> Array:
+        """Compute Cholesky decomposition.
+
+        Returns lower triangular matrix L where A = L @ L.T.
+
+        Raises:
+            ValueError: If matrix is not square or not positive-definite.
+        """
+        ...
+
+    @staticmethod
+    def qr(a: Array) -> tuple[Array, Array]:
+        """QR decomposition.
+
+        Returns (Q, R) where A = Q @ R, Q is orthogonal and R is upper triangular.
+
+        Raises:
+            ValueError: If array is not 2D.
+        """
+        ...
+
+    @staticmethod
+    def eig(a: Array) -> tuple[Array, Array]:
+        """Compute eigenvalues and eigenvectors.
+
+        Returns:
+            Tuple of (eigenvalues, eigenvectors) where eigenvalues is a 1D array
+            and eigenvectors is a 2D array with eigenvectors as columns.
+            Eigenvalues are sorted by absolute value (descending).
+
+        Raises:
+            ValueError: If matrix is not square.
+        """
+        ...
+
+    @staticmethod
+    def eig_with_params(a: Array, max_iter: int = 1000, tol: float = 1e-10) -> tuple[Array, Array]:
+        """Eigendecomposition with custom iteration parameters.
+
+        Args:
+            a: Input square matrix.
+            max_iter: Maximum number of QR iterations.
+            tol: Convergence tolerance for off-diagonal elements.
+
+        Returns:
+            Tuple of (eigenvalues, eigenvectors).
+
+        Raises:
+            ValueError: If matrix is not square.
+        """
+        ...
+
+    @staticmethod
+    def eigvals(a: Array) -> Array:
+        """Compute eigenvalues only.
+
+        More efficient than eig() when eigenvectors are not needed.
+
+        Returns:
+            1D array of eigenvalues sorted by absolute value (descending).
+
+        Raises:
+            ValueError: If matrix is not square.
+        """
+        ...
+
+    @staticmethod
+    def diagonal(a: Array, k: int | None = None) -> Array:
+        """Extract the k-th diagonal from a 2D array."""
+        ...
+
+
+class stats:
+    """Statistical functions."""
+
+    @staticmethod
+    def sum(a: Array) -> float:
+        """Sum of all elements."""
+        ...
+
+    @staticmethod
+    def mean(a: Array) -> float:
+        """Mean of all elements."""
+        ...
+
+    @staticmethod
+    def var(a: Array) -> float:
+        """Variance of all elements (population variance)."""
+        ...
+
+    @staticmethod
+    def std(a: Array) -> float:
+        """Standard deviation of all elements."""
+        ...
+
+    @staticmethod
+    def median(a: Array) -> float:
+        """Median of all elements."""
+        ...
+
+    @staticmethod
+    def quantile(a: Array, q: float) -> float:
+        """q-th quantile of all elements (q in [0, 1])."""
+        ...
+
+    @staticmethod
+    def any(a: Array) -> bool:
+        """True if any element is non-zero."""
+        ...
+
+    @staticmethod
+    def all(a: Array) -> bool:
+        """True if all elements are non-zero."""
+        ...
+
+    @staticmethod
+    def pearson(a: Array, b: Array) -> float:
+        """Compute Pearson correlation coefficient between two arrays.
+
+        Args:
+            a: First 1D array.
+            b: Second 1D array of the same length.
+
+        Returns:
+            Pearson correlation coefficient between -1 and 1.
+        """
+        ...
+
+    @staticmethod
+    def spearman(a: Array, b: Array) -> float:
+        """Compute Spearman rank correlation coefficient between two arrays.
+
+        Args:
+            a: First 1D array.
+            b: Second 1D array of the same length.
+
+        Returns:
+            Spearman correlation coefficient between -1 and 1.
+        """
+        ...
+
+
+class random:
+    """Random number generation."""
+
+    class Generator:
+        """Random number generator."""
+
+        def __init__(self) -> None:
+            """Create time-seeded generator."""
+            ...
+
+        @staticmethod
+        def from_seed(seed: int) -> Generator:
+            """Create generator with explicit seed."""
+            ...
+
+        def uniform(self, low: float, high: float, shape: Sequence[int]) -> Array: ...
+        def standard_normal(self, shape: Sequence[int]) -> Array: ...
+        def normal(self, mu: float, sigma: float, shape: Sequence[int]) -> Array: ...
+        def randint(self, low: int, high: int, shape: Sequence[int]) -> Array: ...
+        def gamma(self, shape_param: float, scale: float, shape: Sequence[int]) -> Array:
+            """Generate gamma-distributed random samples.
+
+            Args:
+                shape_param: Shape parameter (k or alpha), must be positive.
+                scale: Scale parameter (theta), must be positive.
+                shape: Output array shape.
+
+            Returns:
+                Array of gamma-distributed samples.
+            """
+            ...
+        def beta(self, alpha: float, beta: float, shape: Sequence[int]) -> Array:
+            """Generate beta-distributed random samples.
+
+            Args:
+                alpha: First shape parameter, must be positive.
+                beta: Second shape parameter, must be positive.
+                shape: Output array shape.
+
+            Returns:
+                Array of beta-distributed samples in the interval (0, 1).
+            """
+            ...
+
+        def lognormal(self, mu: float, sigma: float, shape: Sequence[int]) -> Array:
+            """Generate log-normal distributed random samples.
+
+            Args:
+                mu: Mean of the underlying normal distribution.
+                sigma: Standard deviation of the underlying normal distribution.
+                shape: Output array shape.
+
+            Returns:
+                Array of log-normal distributed samples.
+            """
+            ...
+
+    @staticmethod
+    def seed(seed: int) -> Generator:
+        """Create a seeded random number generator."""
+        ...
+
 class Array:
     """N-dimensional array of float64 values."""
 
@@ -194,6 +417,28 @@ class Array:
         ...
     def all(self) -> bool:
         """True if all elements are non-zero."""
+        ...
+
+    # Correlation methods
+    def pearson(self, other: Array) -> float:
+        """Compute Pearson correlation coefficient with another array.
+
+        Args:
+            other: Another 1D array of the same length.
+
+        Returns:
+            Pearson correlation coefficient between -1 and 1.
+        """
+        ...
+    def spearman(self, other: Array) -> float:
+        """Compute Spearman rank correlation coefficient with another array.
+
+        Args:
+            other: Another 1D array of the same length.
+
+        Returns:
+            Spearman correlation coefficient between -1 and 1.
+        """
         ...
 
     def __len__(self) -> int: ...

@@ -210,6 +210,14 @@ impl PyArray {
         self.inner.all()
     }
 
+    fn pearson(&self, other: &PyArray) -> f64 {
+        self.inner.pearson(&other.inner)
+    }
+
+    fn spearman(&self, other: &PyArray) -> f64 {
+        self.inner.spearman(&other.inner)
+    }
+
     fn __add__(&self, other: ArrayOrScalar) -> Self {
         match other {
             ArrayOrScalar::Array(arr) => PyArray { inner: &self.inner + &arr.inner },
@@ -576,9 +584,6 @@ mod substratum {
     #[pymodule_export]
     use super::PyArray;
 
-    #[pymodule_export]
-    use super::PyGenerator;
-
     #[pyfunction]
     fn zeros(shape: Vec<usize>) -> PyArray {
         PyArray::zeros(shape)
@@ -615,5 +620,140 @@ mod substratum {
     #[pyo3(signature = (data, shape=None))]
     fn asarray(data: Vec<f64>, shape: Option<Vec<usize>>) -> PyResult<PyArray> {
         PyArray::asarray(data, shape)
+    }
+
+    #[pymodule]
+    mod linalg {
+        use super::*;
+
+        #[pyfunction]
+        fn matmul(a: &PyArray, b: &PyArray) -> PyArray {
+            PyArray { inner: a.inner.matmul(&b.inner) }
+        }
+
+        #[pyfunction]
+        fn dot(a: &PyArray, b: &PyArray) -> PyArray {
+            PyArray { inner: a.inner.dot(&b.inner) }
+        }
+
+        #[pyfunction]
+        fn transpose(a: &PyArray) -> PyArray {
+            PyArray { inner: a.inner.transpose() }
+        }
+
+        #[pyfunction]
+        fn cholesky(a: &PyArray) -> PyResult<PyArray> {
+            a.inner.cholesky()
+                .map(|l| PyArray { inner: l })
+                .map_err(|e| PyValueError::new_err(e))
+        }
+
+        #[pyfunction]
+        fn qr(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
+            a.inner.qr()
+                .map(|(q, r)| (PyArray { inner: q }, PyArray { inner: r }))
+                .map_err(|e| PyValueError::new_err(e))
+        }
+
+        #[pyfunction]
+        fn eig(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
+            a.inner.eig()
+                .map(|(vals, vecs)| (PyArray { inner: vals }, PyArray { inner: vecs }))
+                .map_err(|e| PyValueError::new_err(e))
+        }
+
+        #[pyfunction]
+        #[pyo3(signature = (a, max_iter=1000, tol=1e-10))]
+        fn eig_with_params(a: &PyArray, max_iter: usize, tol: f64) -> PyResult<(PyArray, PyArray)> {
+            a.inner.eig_with_params(max_iter, tol)
+                .map(|(vals, vecs)| (PyArray { inner: vals }, PyArray { inner: vecs }))
+                .map_err(|e| PyValueError::new_err(e))
+        }
+
+        #[pyfunction]
+        fn eigvals(a: &PyArray) -> PyResult<PyArray> {
+            a.inner.eigvals()
+                .map(|vals| PyArray { inner: vals })
+                .map_err(|e| PyValueError::new_err(e))
+        }
+
+        #[pyfunction]
+        #[pyo3(signature = (a, k=None))]
+        fn diagonal(a: &PyArray, k: Option<isize>) -> PyResult<PyArray> {
+            if a.inner.ndim() != 2 {
+                return Err(PyValueError::new_err("diagonal requires a 2D array"));
+            }
+            Ok(PyArray {
+                inner: a.inner.diagonal(k.unwrap_or(0)),
+            })
+        }
+    }
+
+    #[pymodule]
+    mod stats {
+        use super::*;
+
+        #[pyfunction]
+        fn sum(a: &PyArray) -> f64 {
+            a.inner.sum()
+        }
+
+        #[pyfunction]
+        fn mean(a: &PyArray) -> f64 {
+            a.inner.mean()
+        }
+
+        #[pyfunction]
+        fn var(a: &PyArray) -> f64 {
+            a.inner.var()
+        }
+
+        #[pyfunction]
+        fn std(a: &PyArray) -> f64 {
+            a.inner.std()
+        }
+
+        #[pyfunction]
+        fn median(a: &PyArray) -> f64 {
+            a.inner.median()
+        }
+
+        #[pyfunction]
+        fn quantile(a: &PyArray, q: f64) -> f64 {
+            a.inner.quantile(q)
+        }
+
+        #[pyfunction]
+        fn any(a: &PyArray) -> bool {
+            a.inner.any()
+        }
+
+        #[pyfunction]
+        fn all(a: &PyArray) -> bool {
+            a.inner.all()
+        }
+
+        #[pyfunction]
+        fn pearson(a: &PyArray, b: &PyArray) -> f64 {
+            a.inner.pearson(&b.inner)
+        }
+
+        #[pyfunction]
+        fn spearman(a: &PyArray, b: &PyArray) -> f64 {
+            a.inner.spearman(&b.inner)
+        }
+    }
+
+    #[pymodule]
+    mod random {
+        use super::*;
+
+        #[pymodule_export]
+        use super::PyGenerator as Generator;
+
+        #[pyfunction]
+        fn seed(seed: u64) -> PyGenerator {
+            PyGenerator::from_seed(seed)
+        }
     }
 }
