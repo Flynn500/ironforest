@@ -57,6 +57,7 @@ impl BallTree {
     }
 
     fn compute_bounding_ball(&self, start: usize, end: usize) -> (Vec<f64>, f64) {
+        let n = (start - end) as f64;
         let mut centroid = vec![0.0; self.dim];
 
         for i in start..end {
@@ -80,7 +81,7 @@ impl BallTree {
                 max_dist = dist;
             }
         }
-        (centroid, max_dist.sqrt())
+        (centroid, max_dist.sqrt()) //REMOVE SQRT IF WE SWAP DISTANCE METHODS TO ALLOW MORE
     }
 
     fn select_split_dim(&self, start: usize, end: usize) -> usize {
