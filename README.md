@@ -29,7 +29,7 @@ Output:
 - Statistical methods (mean, var, quantile)
 - matrix methods and constructors
 - cholesky and eigen decomposition
-  - Ball Tree, knn and radius queries
+- Ball Tree, knn and radius queries
 
 ### Top-level
 - `substratum.Array`
