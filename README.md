@@ -23,7 +23,7 @@ Output:
 `a @ b = [19.0, 22.0, 43.0, 50.0]`
 
 ## Features
-- Array an N-dimensional array object. 
+- Array, an N-dimensional array object. 
 - Broadcast operations
 - trig methods
 - Statistical methods (mean, var, quantile)
@@ -73,13 +73,15 @@ Standard normal: [-0.0008585765206425146, 1.4733334715623352, -1.16180050645278,
 ## Modules
 
 ### Random
-`Generator`: Substratum provides a random generator object that can sample from uniform, normal, lognormal, gamma and beta distributions. Support for additional distributions is planned.
+`Generator` object that can sample from uniform, normal, lognormal, gamma and beta distributions. Support for additional distributions is planned.
 
 ### Linalg
-Currently only matrix methods and constructors alongside cholesky and eigen decomposition.
+- Standard matrix methods and constructors.
+- cholesky and eigen and qr decomposition.
 
 ### Stats
-Basic statistical methods for `Array` objects, mean, var and quantile
+- Basic statistical methods for `Array` objects, mean, var and quantile.
+- Pearson and Spearman correlation.
 
 ### Spatial
-`BallTree` Ball tree object with a kNN query and radius query.
+`BallTree` Ball tree object with a kNN and radius queries.

@@ -14,8 +14,8 @@ def test_array_creation():
     arr2 = ss.Array([2, 2], [1.0, 2.0, 3.0, 4.0])
     print(f"\nArray from data: {arr2}")
     print(f"Element at [0, 1]: {arr2.get([0, 1])}")
-
     arr3 = ss.eye(3,3)
+    print(f"\nArray from data: {arr3}")
     
 def test_operations():
     """Test array operations"""
@@ -101,3 +101,4 @@ if __name__ == "__main__":
     test_matmul()
     test_ball_tree()
     print("\n\nAll tests passed! ✓")
+

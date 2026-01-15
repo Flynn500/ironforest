@@ -245,14 +245,6 @@ impl PyArray {
         self.inner.all()
     }
 
-    fn pearson(&self, other: &PyArray) -> f64 {
-        self.inner.pearson(&other.inner)
-    }
-
-    fn spearman(&self, other: &PyArray) -> f64 {
-        self.inner.spearman(&other.inner)
-    }
-
     fn __add__(&self, other: ArrayOrScalar) -> Self {
         match other {
             ArrayOrScalar::Array(arr) => PyArray { inner: &self.inner + &arr.inner },
@@ -319,37 +311,6 @@ impl PyArray {
 
     fn t(&self) -> Self {
         PyArray { inner: self.inner.t() }
-    }
-
-    fn cholesky(&self) -> PyResult<PyArray> {
-        self.inner.cholesky()
-            .map(|l| PyArray { inner: l })
-            .map_err(|e| PyValueError::new_err(e))
-    }
-
-    fn qr(&self) -> PyResult<(PyArray, PyArray)> {
-        self.inner.qr()
-            .map(|(q, r)| (PyArray { inner: q }, PyArray { inner: r }))
-            .map_err(|e| PyValueError::new_err(e))
-    }
-
-    fn eig(&self) -> PyResult<(PyArray, PyArray)> {
-        self.inner.eig()
-            .map(|(vals, vecs)| (PyArray { inner: vals }, PyArray { inner: vecs }))
-            .map_err(|e| PyValueError::new_err(e))
-    }
-
-    #[pyo3(signature = (max_iter=1000, tol=1e-10))]
-    fn eig_with_params(&self, max_iter: usize, tol: f64) -> PyResult<(PyArray, PyArray)> {
-        self.inner.eig_with_params(max_iter, tol)
-            .map(|(vals, vecs)| (PyArray { inner: vals }, PyArray { inner: vecs }))
-            .map_err(|e| PyValueError::new_err(e))
-    }
-
-    fn eigvals(&self) -> PyResult<PyArray> {
-        self.inner.eigvals()
-            .map(|vals| PyArray { inner: vals })
-            .map_err(|e| PyValueError::new_err(e))
     }
 
     fn __repr__(&self) -> String {

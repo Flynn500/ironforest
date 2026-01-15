@@ -189,12 +189,12 @@ class random:
             ...
 
         @staticmethod
-        def from_seed(seed: int) -> Generator:
+        def from_seed(seed: int) -> random.Generator:
             """Create generator with explicit seed."""
             ...
         
         @staticmethod
-        def new() -> Generator:
+        def new() -> random.Generator:
             """Create a generator."""
             ...
 
@@ -334,68 +334,6 @@ class Array:
     def dot(self, other: Array) -> Array:
         """Dot/matrix product."""
         ...
-    
-    def cholesky(self) -> Array:
-        """Compute Cholesky decomposition.
-
-        Returns lower triangular matrix L where A = L @ L.T.
-
-        Raises:
-            ValueError: If matrix is not square or not positive-definite.
-        """
-        ...
-
-    def qr(self) -> tuple[Array, Array]:
-        """QR decomposition.
-
-        Returns (Q, R) where A = Q @ R, Q is orthogonal and R is upper triangular.
-
-        Raises:
-            ValueError: If array is not 2D.
-        """
-        ...
-
-    def eig(self) -> tuple[Array, Array]:
-        """Compute eigenvalues and eigenvectors.
-
-        Returns:
-            Tuple of (eigenvalues, eigenvectors) where eigenvalues is a 1D array
-            and eigenvectors is a 2D array with eigenvectors as columns.
-            Eigenvalues are sorted by absolute value (descending).
-
-        Raises:
-            ValueError: If matrix is not square.
-        """
-        ...
-
-    def eig_with_params(self, max_iter: int = 1000, tol: float = 1e-10) -> tuple[Array, Array]:
-        """Eigendecomposition with custom iteration parameters.
-
-        Args:
-            max_iter: Maximum number of QR iterations.
-            tol: Convergence tolerance for off-diagonal elements.
-
-        Returns:
-            Tuple of (eigenvalues, eigenvectors).
-
-        Raises:
-            ValueError: If matrix is not square.
-        """
-        ...
-
-    def eigvals(self) -> Array:
-        """Compute eigenvalues only.
-
-        More efficient than eig() when eigenvectors are not needed.
-        Similar to numpy.linalg.eigvals.
-
-        Returns:
-            1D array of eigenvalues sorted by absolute value (descending).
-
-        Raises:
-            ValueError: If matrix is not square.
-        """
-        ...
 
     def __matmul__(self, other: Array) -> Array:
         """Matrix multiplication operator (@)."""
@@ -461,28 +399,6 @@ class Array:
         """True if all elements are non-zero."""
         ...
 
-    # Correlation methods
-    def pearson(self, other: Array) -> float:
-        """Compute Pearson correlation coefficient with another array.
-
-        Args:
-            other: Another 1D array of the same length.
-
-        Returns:
-            Pearson correlation coefficient between -1 and 1.
-        """
-        ...
-    def spearman(self, other: Array) -> float:
-        """Compute Spearman rank correlation coefficient with another array.
-
-        Args:
-            other: Another 1D array of the same length.
-
-        Returns:
-            Spearman correlation coefficient between -1 and 1.
-        """
-        ...
-
     def __len__(self) -> int: ...
     @overload
     def __getitem__(self, index: int) -> float | Array:
@@ -532,60 +448,6 @@ class Array:
     def __neg__(self) -> Array: ...
     def __repr__(self) -> str: ...
 
-
-class Generator:
-    """Random number generator."""
-
-    def __init__(self) -> None:
-        """Create time-seeded generator."""
-        ...
-
-    @staticmethod
-    def from_seed(seed: int) -> Generator:
-        """Create generator with explicit seed."""
-        ...
-
-    def uniform(self, low: float, high: float, shape: Sequence[int]) -> Array: ...
-    def standard_normal(self, shape: Sequence[int]) -> Array: ...
-    def normal(self, mu: float, sigma: float, shape: Sequence[int]) -> Array: ...
-    def randint(self, low: int, high: int, shape: Sequence[int]) -> Array: ...
-    def gamma(self, shape_param: float, scale: float, shape: Sequence[int]) -> Array:
-        """Generate gamma-distributed random samples.
-
-        Args:
-            shape_param: Shape parameter (k or alpha), must be positive.
-            scale: Scale parameter (theta), must be positive.
-            shape: Output array shape.
-
-        Returns:
-            Array of gamma-distributed samples.
-        """
-        ...
-    def beta(self, alpha: float, beta: float, shape: Sequence[int]) -> Array:
-        """Generate beta-distributed random samples.
-
-        Args:
-            alpha: First shape parameter, must be positive.
-            beta: Second shape parameter, must be positive.
-            shape: Output array shape.
-
-        Returns:
-            Array of beta-distributed samples in the interval (0, 1).
-        """
-        ...
-
-    def lognormal(self, mu: float, sigma: float, shape: Sequence[int]) -> Array:
-        """Generate log-normal distributed random samples.
-
-        Args:
-            mu: Mean of the underlying normal distribution.
-            sigma: Standard deviation of the underlying normal distribution.
-            shape: Output array shape.
-
-        Returns:
-            Array of log-normal distributed samples.
-        """
-        ...
 
 
 def zeros(shape: Sequence[int]) -> Array:
