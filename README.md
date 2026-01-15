@@ -1,7 +1,7 @@
 # Substratum
 Substratum is a rust package designed for the dubious python library. Dubious was a project with the personal constraint that no libraries can be used other than numpy. Substratum is my attempt to rewrite some of numpy's features to replace numpy as dubious's lone dependency. I also intend to expand Substratum to include more features, although it is not intended to be a full fledged numpy replacement.
 
-This is largely a learning project. We achieve similar performance to numpy across many operations but basic broadcasting arithmetic is around 4x slower in most cases. There is no real reason to use this library over numpy. I intend to add a few unsafe methods to speed things up where applicable but I don't intend to optimize much further at this stage. 
+This is largely a learning project. We achieve similar performance (beating them in a rare few) to numpy across most operations but basic broadcasting arithmetic is around 4x slower in most cases. I intend to add a few unsafe methods to speed things up where applicable but I don't intend to optimize much further at this stage. 
 
 The core rational behind this library was to get a better grasp of how libraries I use on a regular basis work, and learn how to write python bindings to offload computationally expensive tasks to tools better suited. I chose rust because I have read the book around a year prior to this project, and pyo3 bindings are relitively easy to get working.
 
@@ -13,9 +13,8 @@ NdArray / Array in our python bindings as an N-dimensional array object.
 - matrix methods and constructors
 - cholesky and eigen decomposition
 
-It holds a fairly random collection of methods that are the baseline of what my other library needed to function. This random collection will expand as dubious does, or any other project I undertake that requires NdArrays.
-
-## Generator
+## Random
+### Generator
 Substratum provides a random generator object that can sample from uniform, normal, lognormal, gamma and beta distributions. Support for additional distributions is planned.
 
 ## Examples
