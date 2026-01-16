@@ -1,6 +1,61 @@
 use std::{cmp::Ordering, collections::BinaryHeap};
 use crate::{array::NdArray};
 
+#[derive(Debug, Clone, Copy)]
+pub enum DistanceMetric {
+    Euclidean,
+    Manhattan,
+    Chebyshev,
+}
+
+impl DistanceMetric {
+    #[inline]
+    pub fn distance(self, a: &[f64], b: &[f64]) -> f64 {
+        debug_assert_eq!(a.len(), b.len());
+        match self {
+            DistanceMetric::Euclidean => euclidean(a, b),
+            DistanceMetric::Manhattan => manhattan(a, b),
+            DistanceMetric::Chebyshev => chebyshev(a, b),
+        }
+    }
+}
+
+#[inline]
+fn squared_euclidean(a: &[f64], b: &[f64]) -> f64 {
+    let mut sum = 0.0;
+    for i in 0..a.len() {
+        let d = a[i] - b[i];
+        sum += d * d;
+    }
+    sum
+}
+
+#[inline]
+fn euclidean(a: &[f64], b: &[f64]) -> f64 {
+    squared_euclidean(a, b).sqrt()
+}
+
+#[inline]
+fn manhattan(a: &[f64], b: &[f64]) -> f64 {
+    let mut sum = 0.0;
+    for i in 0..a.len() {
+        sum += (a[i] - b[i]).abs();
+    }
+    sum
+}
+
+#[inline]
+fn chebyshev(a: &[f64], b: &[f64]) -> f64 {
+    let mut m: f64 = 0.0;
+    for i in 0..a.len() {
+        m = m.max((a[i] - b[i]).abs());
+    }
+    m
+}
+
+
+
+
 #[derive(Clone, Debug)]
 pub struct BallNode {
     pub center: Vec<f64>,
@@ -19,6 +74,7 @@ pub struct BallTree {
     pub n_points: usize,
     pub dim: usize,
     pub leaf_size: usize,
+    pub metric: DistanceMetric,
 }
 
 //for knn search
@@ -47,7 +103,7 @@ impl Ord for HeapItem {
 }
 
 impl BallTree {
-    pub fn new(points: &[f64], n_points: usize, dim: usize, leaf_size: usize) -> Self{
+    pub fn new(points: &[f64], n_points: usize, dim: usize, leaf_size: usize, metric: DistanceMetric) -> Self{
         let mut tree = BallTree {
             nodes: Vec::new(),
             indices: (0..n_points).collect(),
@@ -55,13 +111,14 @@ impl BallTree {
             n_points,
             dim,
             leaf_size,
+            metric,
         };
 
         tree.build_recursive(0, n_points);
         tree
     }
 
-    pub fn from_ndarray(array: &NdArray<f64>, leaf_size: usize) -> Self {
+    pub fn from_ndarray(array: &NdArray<f64>, leaf_size: usize, metric: DistanceMetric) -> Self {
         let shape = array.shape().dims();
         
         assert!(shape.len() == 2, "Expected 2D array (n_points, dim)");
@@ -69,26 +126,12 @@ impl BallTree {
         let n_points = shape[0];
         let dim = shape[1];
         
-        Self::new(array.as_slice(), n_points, dim, leaf_size)
+        Self::new(array.as_slice(), n_points, dim, leaf_size, metric)
     }
     
     fn get_point(&self, i: usize) -> &[f64] {
         let idx = self.indices[i];
         &self.data[idx * self.dim..(idx + 1) * self.dim]
-    }
-
-    //crude dist function for the time being
-    fn distance(a: &[f64], b: &[f64]) -> f64 {
-        debug_assert_eq!(a.len(), b.len());
-
-        let mut sum = 0.0;
-
-        for i in 0..a.len() {
-            let diff = a[i] - b[i];
-            sum += diff * diff;
-        }
-
-        sum.sqrt()
     }
 
     fn compute_bounding_ball(&self, start: usize, end: usize) -> (Vec<f64>, f64) {
@@ -110,7 +153,7 @@ impl BallTree {
         let mut max_dist: f64 = 0.0;
         for i in start..end {
             let p = self.get_point(i);
-            let dist = Self::distance(p, &centroid);
+            let dist = self.metric.distance(p, &centroid);
 
             if  dist > max_dist {
                 max_dist = dist;
@@ -203,7 +246,7 @@ impl BallTree {
     pub fn query_radius_recursive(&self, node_idx: usize, query: &[f64], radius: f64, results: &mut Vec<usize>) {
         let node = &self.nodes[node_idx];
 
-        let dist_to_centre = Self::distance(query, &node.center);
+        let dist_to_centre = self.metric.distance(query, &node.center);
         if dist_to_centre - node.radius > radius {
             return;
         }
@@ -211,7 +254,7 @@ impl BallTree {
         if node.left.is_none() {
             for i in node.start..node.end {
                 let p = self.get_point(i);
-                if Self::distance(query, p) <= radius {
+                if self.metric.distance(query, p) <= radius {
                     results.push(self.indices[i]);
                 }
             }
@@ -239,7 +282,7 @@ impl BallTree {
     fn query_knn_recursive(&self, node_idx: usize, query: &[f64], heap: &mut BinaryHeap<HeapItem>, k: usize,) {
         let node = &self.nodes[node_idx];
 
-        let dist_to_centre = Self::distance(query, &node.center);
+        let dist_to_centre = self.metric.distance(query, &node.center);
 
         if heap.len() == k {
             if dist_to_centre - node.radius > heap.peek().unwrap().distance {
@@ -250,7 +293,7 @@ impl BallTree {
 
         if node.left.is_none() {
             for i in node.start..node.end {
-                let dist = Self::distance(query, self.get_point(i));
+                let dist = self.metric.distance(query, self.get_point(i));
                 
                 if heap.len() < k {
                     heap.push(HeapItem { distance: dist, index: self.indices[i] });
@@ -265,8 +308,8 @@ impl BallTree {
         let left_idx = node.left.unwrap();
         let right_idx = node.right.unwrap();
 
-        let left_dist = Self::distance(query, &self.nodes[left_idx].center);
-        let right_dist = Self::distance(query, &self.nodes[right_idx].center);
+        let left_dist = self.metric.distance(query, &self.nodes[left_idx].center);
+        let right_dist = self.metric.distance(query, &self.nodes[right_idx].center);
 
         if left_dist <= right_dist {
             self.query_knn_recursive(left_idx, query, heap, k);

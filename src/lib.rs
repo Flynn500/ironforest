@@ -5,7 +5,7 @@ pub mod spatial;
 
 pub use array::{NdArray, Shape, Storage, BroadcastIter};
 pub use random::Generator;
-pub use spatial::BallTree;
+pub use spatial::{BallTree, DistanceMetric};
 
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
@@ -598,8 +598,15 @@ mod substratum {
     }
 
     #[pyfunction]
-    fn outer(a: VecOrArray, b: VecOrArray) -> PyArray {
-        PyArray::outer(a, b)
+    fn column_stack(arrays: Vec<PyArray>) -> PyResult<PyArray> {
+        if arrays.is_empty() {
+            return Err(PyValueError::new_err("Need at least one array"));
+        }
+
+        let array_refs: Vec<&NdArray<f64>> = arrays.iter().map(|a| &a.inner).collect();
+        Ok(PyArray {
+            inner: NdArray::column_stack(&array_refs),
+        })
     }
 
     #[pyfunction]
@@ -682,6 +689,15 @@ mod substratum {
             Ok(PyArray {
                 inner: a.inner.diagonal(k.unwrap_or(0)),
             })
+        }
+
+        #[pyfunction]
+        fn outer(a: VecOrArray, b: VecOrArray) -> PyArray {
+            let a_arr = a.into_ndarray();
+            let b_arr = b.into_ndarray();
+            PyArray {
+                inner: NdArray::outer(&a_arr, &b_arr),
+            }
         }
     }
 
@@ -767,6 +783,18 @@ mod substratum {
     mod spatial {
         use super::*;
 
+        fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
+            match metric.to_lowercase().as_str() {
+                "euclidean" => Ok(DistanceMetric::Euclidean),
+                "manhattan" => Ok(DistanceMetric::Manhattan),
+                "chebyshev" => Ok(DistanceMetric::Chebyshev),
+                _ => Err(PyValueError::new_err(format!(
+                    "Unknown distance metric '{}'. Valid options: 'euclidean', 'manhattan', 'chebyshev'",
+                    metric
+                ))),
+            }
+        }
+
         #[pyclass(name = "BallTree")]
         pub struct PyBallTree {
             inner: BallTree,
@@ -775,10 +803,12 @@ mod substratum {
         #[pymethods]
         impl PyBallTree {
             #[staticmethod]
-            #[pyo3(signature = (array, leaf_size=20))]
-            fn from_array(array: &PyArray, leaf_size: Option<usize>) -> PyResult<Self> {
+            #[pyo3(signature = (array, leaf_size=20, metric="euclidean"))]
+            fn from_array(array: &PyArray, leaf_size: Option<usize>, metric: Option<&str>) -> PyResult<Self> {
                 let leaf_size = leaf_size.unwrap_or(20);
-                let tree = BallTree::from_ndarray(&array.inner, leaf_size);
+                let metric_str = metric.unwrap_or("euclidean");
+                let metric = parse_metric(metric_str)?;
+                let tree = BallTree::from_ndarray(&array.inner, leaf_size, metric);
                 Ok(PyBallTree { inner: tree })
             }
 

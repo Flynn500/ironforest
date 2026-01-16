@@ -1,6 +1,6 @@
 """A Rust-based ndarray library. """
 
-from typing import Iterator, List, Sequence, Tuple, overload
+from typing import Iterator, List, Literal, Sequence, Tuple, overload
 
 class linalg:
     """Linear algebra functions."""
@@ -504,7 +504,11 @@ class spatial:
         """
 
         @staticmethod
-        def from_array(array: Array, leaf_size: int = 20) -> "spatial.BallTree":
+        def from_array(
+            array: Array,
+            leaf_size: int = 20,
+            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean"
+        ) -> "spatial.BallTree":
             """Construct a ball tree from a 2D array of points.
 
             Args:
@@ -512,12 +516,18 @@ class spatial:
                 leaf_size: Maximum number of points in a leaf node. Smaller values lead to
                     faster queries but slower construction and more memory usage.
                     Defaults to 20.
+                metric: Distance metric to use for measuring distances between points.
+                    Options are:
+                    - "euclidean": Standard Euclidean (L2) distance (default)
+                    - "manhattan": Manhattan (L1) distance (taxicab distance)
+                    - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
 
             Returns:
                 A constructed BallTree instance.
 
             Raises:
                 AssertionError: If array is not 2-dimensional.
+                ValueError: If metric is not one of the valid options.
             """
             ...
 
