@@ -4,7 +4,7 @@ Substratum is a rust package designed for the dubious python library. Dubious wa
 The core rational behind this library was to get a better grasp of how libraries I use on a regular basis work, and learn how to write python bindings to offload computationally expensive tasks to tools better suited. I chose rust because I have read the book around a year prior to this project, and pyo3 bindings are relitively easy to get working.
 
 ## Status
-This is largely a learning project and the API is subject to change. We achieve similar performance (beating them in a rare few) to numpy across most operations but basic broadcasting arithmetic is around 4x slower in most cases. I intend to add a few unsafe methods to speed things up where applicable but I don't intend to optimize much further at this stage. 
+This is largely a learning project and the API is subject to change. We achieve similar performance to numpy (beating them in a rare few) across most operations but basic broadcasting arithmetic is around 4x slower in most cases. I intend to add a few unsafe methods to speed things up where applicable but I don't intend to optimize much further at this stage. 
 
 ## Installation
 A PyPi release is planned soon, for now you can build with `maturin build --release` assuming maturin is installed.
@@ -24,12 +24,12 @@ Output:
 
 ## Features
 - Array, an N-dimensional array object. 
-- Broadcast operations
+- Broadcast operations for arrays
 - trig methods
 - Statistical methods (mean, var, quantile)
 - matrix methods and constructors
-- cholesky and eigen decomposition
-- Ball Tree, knn and radius queries
+- cholesky, qr and eigen decomposition
+- Ball Tree with knn and radius queries
 
 ### Top-level
 - `substratum.Array`
