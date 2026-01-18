@@ -35,10 +35,10 @@ Output:
 - `substratum.Array`
 
 ### Modules
-- [substratum.linalg](linalg)
-- [substratum.stats](stats)
-- [substratum.random](random)
-- [substratum.spatial](spatial)
+- [substratum.linalg](#linalg)
+- [substratum.stats](#stats)
+- [substratum.random](#random)
+- [substratum.spatial](#spatial)
 
 ## Examples
 ```python
