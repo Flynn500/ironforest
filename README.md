@@ -24,9 +24,9 @@ Output:
 
 ## Features
 - Array, an N-dimensional array object. 
-- Broadcast operations for arrays
-- trig methods
+- Broadcast operations and trig methods for arrays
 - Statistical methods (mean, var, quantile)
+- Pearson and Spearman correlation
 - matrix methods and constructors
 - cholesky, qr and eigen decomposition
 - Ball Tree with knn and radius queries
@@ -35,10 +35,10 @@ Output:
 - `substratum.Array`
 
 ### Modules
-- `substratum.linalg`
-- `substratum.stats`
-- `substratum.random`
-- `substratum.spatial`
+- [substratum.linalg](linalg)
+- [substratum.stats](stats)
+- [substratum.random](random)
+- [substratum.spatial](spatial)
 
 ## Examples
 ```python
