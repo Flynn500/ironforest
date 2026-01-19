@@ -12,6 +12,7 @@ pub use spatial::{BallTree, DistanceMetric, KernelType};
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
 use pyo3::types::{PySlice, PyTuple};
+use numpy::{PyArrayDyn, PyReadonlyArrayDyn, PyUntypedArrayMethods, PyArrayMethods};
 
 #[derive(FromPyObject)]
 enum ArrayOrScalar {
@@ -19,7 +20,6 @@ enum ArrayOrScalar {
     Scalar(f64),
 }
 
-/// Accepts either a Python list (Vec<f64>) or a PyArray, extracting the flat data.
 #[derive(FromPyObject)]
 enum VecOrArray {
     Array(PyArray),
@@ -318,6 +318,25 @@ impl PyArray {
         PyArray { inner: self.inner.take(&indices) }
     }
 
+    #[staticmethod]
+    fn from_numpy(_py: Python<'_>, arr: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let numpy_arr: PyReadonlyArrayDyn<f64> = arr.extract()?;
+        let shape: Vec<usize> = numpy_arr.shape().to_vec();
+        let data: Vec<f64> = numpy_arr.as_slice()?.to_vec();
+
+        Ok(PyArray {
+            inner: NdArray::from_vec(Shape::new(shape), data),
+        })
+    }
+
+    fn to_numpy<'py>(&self, py: Python<'py>) -> Bound<'py, PyArrayDyn<f64>> {
+        use numpy::IntoPyArray;
+        let shape = self.inner.shape().dims();
+        let data = self.inner.as_slice().to_vec();
+
+        data.into_pyarray(py).reshape(shape).unwrap()
+    }
+
     fn __repr__(&self) -> String {
         format!("Array(shape={:?}, data={:?})",
             self.inner.shape().dims(),
@@ -490,6 +509,10 @@ impl PyArray {
             data: slf.inner.as_slice().to_vec(),
             index: 0,
         }
+    }
+
+    fn __contains__(&self, value: f64) -> bool {
+        self.inner.as_slice().contains(&value)
     }
 }
 
@@ -830,7 +853,7 @@ mod substratum {
                 Ok(PyBallTree { inner: tree })
             }
 
-            fn query_radius(&self, query: &Bound<'_, PyAny>, radius: f64) -> PyResult<PyArray> {
+            fn query_radius(&self, query: &Bound<'_, PyAny>, radius: f64) -> PyResult<Vec<usize>> {
                 let query_vec = if let Ok(scalar) = query.extract::<f64>() {
                     vec![scalar]
                 } else if let Ok(vec_data) = query.extract::<Vec<f64>>() {
@@ -843,14 +866,10 @@ mod substratum {
 
                 let indices = self.inner.query_radius(&query_vec, radius);
 
-                let indices_f64: Vec<f64> = indices.iter().map(|&i| i as f64).collect();
-
-                Ok(PyArray {
-                    inner: NdArray::from_vec(Shape::d1(indices_f64.len()), indices_f64),
-                })
+                Ok(indices)
             }
 
-            fn query_knn(&self, query: &Bound<'_, PyAny>, k: usize) -> PyResult<PyArray> {
+            fn query_knn(&self, query: &Bound<'_, PyAny>, k: usize) -> PyResult<Vec<usize>> {
                 let query_vec = if let Ok(scalar) = query.extract::<f64>() {
                     vec![scalar]
                 } else if let Ok(vec_data) = query.extract::<Vec<f64>>() {
@@ -863,11 +882,7 @@ mod substratum {
 
                 let indices = self.inner.query_knn(&query_vec, k);
 
-                let indices_f64: Vec<f64> = indices.iter().map(|&i| i as f64).collect();
-
-                Ok(PyArray {
-                    inner: NdArray::from_vec(Shape::d1(indices_f64.len()), indices_f64),
-                })
+                Ok(indices)
             }
 
             #[pyo3(signature = (queries=None, bandwidth=1.0, kernel="gaussian"))]

@@ -431,6 +431,7 @@ class Array:
         """Set element at (i, j, ...)."""
         ...
     def __iter__(self) -> Iterator[float]: ...
+    def __contains__(self, value: float) -> bool: ...
 
 
     @overload
@@ -485,6 +486,21 @@ def outer(a: Sequence[float] | Array, b: Sequence[float] | Array) -> Array:
     Args:
         a: First 1D array or list.
         b: Second 1D array or list.
+    """
+    ...
+
+def column_stack(arrays: Sequence[Array]) -> Array:
+    """Stack 1D or 2D arrays as columns into a 2D array.
+
+    Args:
+        arrays: Sequence of 1D or 2D arrays to stack. 1D arrays are converted
+            to columns (n, 1). All arrays must have the same number of rows.
+
+    Returns:
+        A 2D array formed by stacking the given arrays column-wise.
+
+    Raises:
+        ValueError: If arrays is empty or if arrays have mismatched row counts.
     """
     ...
 
