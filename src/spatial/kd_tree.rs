@@ -173,6 +173,7 @@ impl KDTree {
                     results.push(self.indices[i]);
                 }
             }
+            return;
         }
 
         if let Some(left) = node.left {
