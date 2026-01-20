@@ -1,20 +1,23 @@
 use std::collections::BinaryHeap;
 use crate::{array::{NdArray, Shape}, spatial::common::{DistanceMetric, KernelType, HeapItem}};
 
-
 #[derive(Clone, Debug)]
-pub struct BallNode {
-    pub center: Vec<f64>,
-    pub radius: f64,
+pub struct KDNode {
     pub start: usize,
     pub end: usize,
     pub left: Option<usize>,
     pub right: Option<usize>,
+
+    pub axis: usize,
+    pub split: f64,
+
+    pub bbox_min: Vec<f64>,
+    pub bbox_max: Vec<f64>,
 }
 
 #[derive(Debug, Clone)]
-pub struct BallTree {
-    pub nodes: Vec<BallNode>,
+pub struct KDTree {
+    pub nodes: Vec<KDNode>,
     pub indices: Vec<usize>,
     pub data: Vec<f64>,
     pub n_points: usize,
@@ -23,9 +26,9 @@ pub struct BallTree {
     pub metric: DistanceMetric,
 }
 
-impl BallTree {
+impl KDTree {
     pub fn new(points: &[f64], n_points: usize, dim: usize, leaf_size: usize, metric: DistanceMetric) -> Self{
-        let mut tree = BallTree {
+        let mut tree = KDTree {
             nodes: Vec::new(),
             indices: (0..n_points).collect(),
             data: points.to_vec(),
@@ -49,61 +52,35 @@ impl BallTree {
         
         Self::new(array.as_slice(), n_points, dim, leaf_size, metric)
     }
-    
+
     fn get_point(&self, i: usize) -> &[f64] {
         let idx = self.indices[i];
         &self.data[idx * self.dim..(idx + 1) * self.dim]
     }
 
-    fn compute_bounding_ball(&self, start: usize, end: usize) -> (Vec<f64>, f64) {
-        let n = (end - start) as f64;
-        let mut centroid = vec![0.0; self.dim];
+    fn compute_bounding_box_and_split(&self, start: usize, end: usize) -> (Vec<f64>, Vec<f64>, usize) {
+        let mut min = vec![f64::INFINITY; self.dim];
+        let mut max = vec![f64::NEG_INFINITY; self.dim];
 
         for i in start..end {
             let p = self.get_point(i);
             for (j, &x) in p.iter().enumerate() {
-                centroid[j] += x;
+                max[j] = max[j].max(x);
+                min[j] = min[j].min(x);
+
             }
         }
-
-        
-        for c in &mut centroid {
-            *c /= n;
-        }
-
-        let mut max_dist: f64 = 0.0;
-        for i in start..end {
-            let p = self.get_point(i);
-            let dist = self.metric.distance(p, &centroid);
-
-            if  dist > max_dist {
-                max_dist = dist;
-            }
-        }
-        (centroid, max_dist)
-    }
-
-    fn select_split_dim(&self, start: usize, end: usize) -> usize {
         let mut best_dim = 0;
         let mut best_spread = 0.0;
-        
         for d in 0..self.dim {
-            let mut min_val = f64::INFINITY;
-            let mut max_val = f64::NEG_INFINITY;
-            
-            for i in start..end {
-                let val = self.get_point(i)[d];
-                min_val = min_val.min(val);
-                max_val = max_val.max(val);
-            }
-            
-            let spread = max_val - min_val;
+            let spread = max[d] - min[d];
             if spread > best_spread {
                 best_spread = spread;
                 best_dim = d;
             }
         }
-        best_dim
+
+        (min, max, best_dim)        
     }
 
     fn partition(&mut self, start: usize, end: usize, dim: usize) -> usize {
@@ -120,18 +97,20 @@ impl BallTree {
         start + mid_offset
     }
 
+
     fn build_recursive(&mut self, start: usize, end: usize) -> usize {
-        let (center, radius) = self.compute_bounding_ball(start, end);
-        
+        let (min, max, axis)  = self.compute_bounding_box_and_split(start, end);
         let node_idx = self.nodes.len();
 
-        self.nodes.push(BallNode {
-            center,
-            radius,
-            start,
-            end,
-            left: None,
-            right: None,
+        self.nodes.push(KDNode { 
+            start, 
+            end, 
+            left: None, 
+            right: None, 
+            axis, 
+            split: 0.0, 
+            bbox_min: min, 
+            bbox_max: max,
         });
         
         let count = end - start;
@@ -140,8 +119,9 @@ impl BallTree {
             return node_idx;
         }
 
-        let dim = self.select_split_dim(start, end);
-        let mut mid = self.partition(start, end, dim);
+        let mut mid = self.partition(start, end, axis);
+        let split = self.get_point(mid)[axis];
+        self.nodes[node_idx].split = split;
 
         if mid == start {
             mid = start + 1;
@@ -158,6 +138,20 @@ impl BallTree {
         node_idx
     }
 
+    fn min_dist_to_bbox(&self, query: &[f64], bbox_min: &[f64], bbox_max: &[f64]) -> f64 {
+        let mut sum = 0.0;
+        for d in 0..self.dim {
+            if query[d] < bbox_min[d] {
+                let diff = bbox_min[d] - query[d];
+                sum += diff * diff;
+            } else if query[d] > bbox_max[d] {
+                let diff = query[d] - bbox_max[d];
+                sum += diff * diff;
+            }
+        }
+        sum.sqrt()
+    }
+
     pub fn query_radius(&self, query: &[f64], radius: f64) -> Vec<usize> {
         let mut results = Vec::new();
         self.query_radius_recursive(0, query, radius, &mut results);
@@ -167,8 +161,8 @@ impl BallTree {
     pub fn query_radius_recursive(&self, node_idx: usize, query: &[f64], radius: f64, results: &mut Vec<usize>) {
         let node = &self.nodes[node_idx];
 
-        let dist_to_centre = self.metric.distance(query, &node.center);
-        if dist_to_centre - node.radius > radius {
+        let min_dist = self.min_dist_to_bbox(query, &node.bbox_min, &node.bbox_max);
+        if min_dist > radius {
             return;
         }
 
@@ -203,10 +197,10 @@ impl BallTree {
     fn query_knn_recursive(&self, node_idx: usize, query: &[f64], heap: &mut BinaryHeap<HeapItem>, k: usize,) {
         let node = &self.nodes[node_idx];
 
-        let dist_to_centre = self.metric.distance(query, &node.center);
+        let min_dist = self.min_dist_to_bbox(query, &node.bbox_min, &node.bbox_max);
 
         if heap.len() == k {
-            if dist_to_centre - node.radius > heap.peek().unwrap().distance {
+            if min_dist > heap.peek().unwrap().distance {
                 return;
             }
         }
@@ -224,20 +218,17 @@ impl BallTree {
             }
             return;
         }
-        
-        let left_idx = node.left.unwrap();
-        let right_idx = node.right.unwrap();
 
-        let left_dist = self.metric.distance(query, &self.nodes[left_idx].center);
-        let right_dist = self.metric.distance(query, &self.nodes[right_idx].center);
+    let left_idx = node.left.unwrap();
+    let right_idx = node.right.unwrap();
 
-        if left_dist <= right_dist {
-            self.query_knn_recursive(left_idx, query, heap, k);
-            self.query_knn_recursive(right_idx, query, heap, k);
-        } else {
-            self.query_knn_recursive(right_idx, query, heap, k);
-            self.query_knn_recursive(left_idx, query, heap, k);
-        }
+    if query[node.axis] <= node.split {
+        self.query_knn_recursive(left_idx, query, heap, k);
+        self.query_knn_recursive(right_idx, query, heap, k);
+    } else {
+        self.query_knn_recursive(right_idx, query, heap, k);
+        self.query_knn_recursive(left_idx, query, heap, k);
+    }
 
     }
 
@@ -263,9 +254,8 @@ impl BallTree {
 
     fn kde_recursive(&self, node_idx: usize, query: &[f64], h: f64, density: &mut f64, kernel: KernelType) {
         let node = &self.nodes[node_idx];
-        let dist_to_center = self.metric.distance(query, &node.center);
+        let min_dist = self.min_dist_to_bbox(query, &node.bbox_min, &node.bbox_max);
 
-        let min_dist = (dist_to_center - node.radius).max(0.0);
         if kernel.evaluate(min_dist, h) < 1e-10 {
             return;
         }

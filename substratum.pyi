@@ -245,7 +245,7 @@ class random:
         """Create a seeded random number generator."""
         ...
 
-class Array:
+class Array(Sequence[float]):
     """N-dimensional array of float64 values."""
 
     def __init__(self, shape: Sequence[int], data: Sequence[float]) -> None:
