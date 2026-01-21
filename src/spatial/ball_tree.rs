@@ -106,26 +106,26 @@ impl BallTree {
         best_dim
     }
 
-fn partition(&mut self, start: usize, end: usize, dim: usize) -> usize {
-    let mut slots_by_key: Vec<(f64, usize)> = (start..end)
-        .map(|slot| (self.get_point(slot)[dim], slot))
-        .collect();
+    fn partition(&mut self, start: usize, end: usize, dim: usize) -> usize {
+        let mut slots_by_key: Vec<(f64, usize)> = (start..end)
+            .map(|slot| (self.get_point(slot)[dim], slot))
+            .collect();
 
-    let mid_offset = (end - start) / 2;
+        let mid_offset = (end - start) / 2;
 
-    slots_by_key.select_nth_unstable_by(mid_offset, |a, b| {
-        a.0.partial_cmp(&b.0).unwrap()
-    });
+        slots_by_key.select_nth_unstable_by(mid_offset, |a, b| {
+            a.0.partial_cmp(&b.0).unwrap()
+        });
 
-    let new_order: Vec<usize> = slots_by_key
-        .iter()
-        .map(|&(_key, slot)| self.indices[slot])
-        .collect();
+        let new_order: Vec<usize> = slots_by_key
+            .iter()
+            .map(|&(_key, slot)| self.indices[slot])
+            .collect();
 
-    self.indices[start..end].copy_from_slice(&new_order);
+        self.indices[start..end].copy_from_slice(&new_order);
 
-    start + mid_offset
-}
+        start + mid_offset
+    }
 
 
     fn build_recursive(&mut self, start: usize, end: usize) -> usize {
