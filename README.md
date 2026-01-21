@@ -7,7 +7,9 @@ The core rational behind this library was to get a better grasp of how libraries
 This is largely a learning project and the API is subject to change. We achieve similar performance to numpy (beating them in a rare few) across most operations but basic broadcasting arithmetic is around 4x slower in most cases. I intend to add a few unsafe methods to speed things up where applicable but I don't intend to optimize much further at this stage. 
 
 ## Installation
-A PyPi release is planned soon, for now you can build with `maturin build --release` assuming maturin is installed.
+`pip install substratumx`
+
+You can also build with `maturin build --release` assuming maturin is installed.
 
 ## Quickstart
 
