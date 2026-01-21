@@ -101,6 +101,7 @@ impl VPTree {
             .collect();
 
         let n = idx_dist.len();
+        debug_assert!(n > 0, "init_node called with only vantage point");
         let mid = n / 2;
 
         idx_dist.select_nth_unstable_by(mid, |a, b| {
@@ -118,9 +119,9 @@ impl VPTree {
         };
 
         let reordered: Vec<usize> = idx_dist.iter().map(|(i, _)| self.indices[*i]).collect();
-        self.indices[start..end].copy_from_slice(&reordered);
+        self.indices[start + 1..end].copy_from_slice(&reordered);
 
-        (median_radius, min, max, start + mid)
+        (median_radius, min, max, start + 1 + mid)
     }
 
     fn min_dist_to_node(&self, query: &[f64], node: &VPNode) -> f64 {
