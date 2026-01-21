@@ -58,7 +58,7 @@ impl KDTree {
         &self.data[idx * self.dim..(idx + 1) * self.dim]
     }
 
-    fn compute_bounding_box_and_split(&self, start: usize, end: usize) -> (Vec<f64>, Vec<f64>, usize) {
+    fn init_node(&self, start: usize, end: usize) -> (Vec<f64>, Vec<f64>, usize) {
         let mut min = vec![f64::INFINITY; self.dim];
         let mut max = vec![f64::NEG_INFINITY; self.dim];
 
@@ -106,7 +106,7 @@ impl KDTree {
 
 
     fn build_recursive(&mut self, start: usize, end: usize) -> usize {
-        let (min, max, axis)  = self.compute_bounding_box_and_split(start, end);
+        let (min, max, axis)  = self.init_node(start, end);
         let node_idx = self.nodes.len();
 
         self.nodes.push(KDNode { 
@@ -227,17 +227,16 @@ impl KDTree {
             return;
         }
 
-    let left_idx = node.left.unwrap();
-    let right_idx = node.right.unwrap();
+        let left_idx = node.left.unwrap();
+        let right_idx = node.right.unwrap();
 
-    if query[node.axis] <= node.split {
-        self.query_knn_recursive(left_idx, query, heap, k);
-        self.query_knn_recursive(right_idx, query, heap, k);
-    } else {
-        self.query_knn_recursive(right_idx, query, heap, k);
-        self.query_knn_recursive(left_idx, query, heap, k);
-    }
-
+        if query[node.axis] <= node.split {
+            self.query_knn_recursive(left_idx, query, heap, k);
+            self.query_knn_recursive(right_idx, query, heap, k);
+        } else {
+            self.query_knn_recursive(right_idx, query, heap, k);
+            self.query_knn_recursive(left_idx, query, heap, k);
+        }
     }
 
     pub fn kernel_density(&self, queries: &NdArray<f64>, bandwidth: f64, kernel: KernelType) -> NdArray<f64> {

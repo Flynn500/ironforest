@@ -1,6 +1,25 @@
 use std::{cmp::Ordering, collections::BinaryHeap};
 use crate::{array::{NdArray, Shape}, spatial::common::{DistanceMetric, KernelType, HeapItem}};
+use crate::random::Generator;
+#[derive(Clone, Copy, Debug, Default)]
+pub enum VantagePointSelection {
+    #[default]
+    First,
+    Random,
+}
 
+impl VantagePointSelection{
+    fn select_vantage(&self, start: usize, end: usize) -> usize {
+        match self {
+            VantagePointSelection::First => start,
+            VantagePointSelection::Random => {
+                let mut rng = Generator::new();
+                let i = rng.randint(start as i64, end as i64, Shape::scalar());
+                i.item() as usize
+            },
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct VPNode {
@@ -25,11 +44,12 @@ pub struct VPTree {
     pub dim: usize,
     pub leaf_size: usize,
     pub metric: DistanceMetric,
+    pub selection_method: VantagePointSelection,
 }
 
 
 impl VPTree {
-    pub fn new(points: &[f64], n_points: usize, dim: usize, leaf_size: usize, metric: DistanceMetric) -> Self{
+    pub fn new(points: &[f64], n_points: usize, dim: usize, leaf_size: usize, metric: DistanceMetric, selection_method: VantagePointSelection) -> Self{
         let mut tree = VPTree {
             nodes: Vec::new(),
             indices: (0..n_points).collect(),
@@ -38,13 +58,14 @@ impl VPTree {
             dim,
             leaf_size,
             metric,
+            selection_method,
         };
 
         tree.build_recursive(0, n_points);
         tree
     }
 
-    pub fn from_ndarray(array: &NdArray<f64>, leaf_size: usize, metric: DistanceMetric) -> Self {
+    pub fn from_ndarray(array: &NdArray<f64>, leaf_size: usize, metric: DistanceMetric, selection_method: VantagePointSelection ) -> Self {
         let shape = array.shape().dims();
         
         assert!(shape.len() == 2, "Expected 2D array (n_points, dim)");
@@ -52,7 +73,7 @@ impl VPTree {
         let n_points = shape[0];
         let dim = shape[1];
         
-        Self::new(array.as_slice(), n_points, dim, leaf_size, metric)
+        Self::new(array.as_slice(), n_points, dim, leaf_size, metric, selection_method)
     }
 
     fn get_point(&self, i: usize) -> &[f64] {
@@ -60,7 +81,7 @@ impl VPTree {
         &self.data[idx * self.dim..(idx + 1) * self.dim]
     }
 
-    fn compute_distances_and_partition(&mut self, start: usize, end: usize, vantage_idx: usize) -> (f64, f64, f64, usize) {
+    fn init_node(&mut self, start: usize, end: usize, vantage_idx: usize) -> (f64, f64, f64, usize) {
         let mut min = f64::INFINITY;
         let mut max = f64::NEG_INFINITY;
 
@@ -109,16 +130,9 @@ impl VPTree {
         l1.max(l2).max(0.0)
     }
 
-    fn max_dist_to_node(&self, query: &[f64], node: &VPNode) -> f64 {
-        let vantage_point = self.get_point(node.vantage);
-        let d_qv = self.metric.distance(query, vantage_point);
-
-        d_qv + node.max_dist
-    }
-
     fn build_recursive(&mut self, start: usize, end: usize) -> usize {
-        let vantage_idx = start; 
-        let (radius, min_dist, max_dist, mid) = self.compute_distances_and_partition(start, end, vantage_idx);
+        let vantage_idx = self.selection_method.select_vantage(start, end); 
+        let (radius, min_dist, max_dist, mid) = self.init_node(start, end, vantage_idx);
     
         let node_idx = self.nodes.len();
 
@@ -146,5 +160,133 @@ impl VPTree {
         self.nodes[node_idx].right = Some(right_idx);
         
         node_idx
+    }
+
+    pub fn query_radius(&self, query: &[f64], radius: f64) -> Vec<usize> {
+        let mut results = Vec::new();
+        self.query_radius_recursive(0, query, radius, &mut results);
+        results
+    }
+
+    pub fn query_radius_recursive(&self, node_idx: usize, query: &[f64], radius: f64, results: &mut Vec<usize>) {
+        let node = &self.nodes[node_idx];
+
+        let min_dist = self.min_dist_to_node(query, &node);
+        if min_dist > radius {
+            return;
+        }
+
+        if node.left.is_none() {
+            for i in node.start..node.end {
+                let p = self.get_point(i);
+                if self.metric.distance(query, p) <= radius {
+                    results.push(self.indices[i]);
+                }
+            }
+            return;
+        }
+
+        if let Some(left) = node.left {
+            self.query_radius_recursive(left, query, radius, results);
+        }
+
+        if let Some(right) = node.right {
+            self.query_radius_recursive(right, query, radius, results);
+        }
+    }
+
+        pub fn query_knn(&self, query: &[f64], k: usize) -> Vec<usize> {
+        if k == 0 || self.n_points == 0 {
+            return Vec::new();
+        }
+        
+        let mut heap = BinaryHeap::with_capacity(k);
+        self.query_knn_recursive(0, query, &mut heap, k);
+        heap.into_sorted_vec().into_iter().map(|item| item.index).collect()
+    }
+
+    fn query_knn_recursive(&self, node_idx: usize, query: &[f64], heap: &mut BinaryHeap<HeapItem>, k: usize,) {
+        let node = &self.nodes[node_idx];
+
+        let min_dist = self.min_dist_to_node(query, &node);
+
+        if heap.len() == k {
+            if min_dist > heap.peek().unwrap().distance {
+                return;
+            }
+        }
+
+        if node.left.is_none() {
+            for i in node.start..node.end {
+                let dist = self.metric.distance(query, self.get_point(i));
+                
+                if heap.len() < k {
+                    heap.push(HeapItem { distance: dist, index: self.indices[i] });
+                } else if dist < heap.peek().unwrap().distance {
+                    heap.pop();
+                    heap.push(HeapItem { distance: dist, index: self.indices[i] });
+                }
+            }
+            return;
+        }
+
+        let left_idx = node.left.unwrap();
+        let right_idx = node.right.unwrap();
+
+        let vantage_point = self.get_point(node.vantage);
+        let dist_to_vantage = self.metric.distance(query, vantage_point);
+
+        let (first, second) = if dist_to_vantage < node.radius {
+            (left_idx, right_idx)
+        } else {
+            (right_idx, left_idx) 
+        };
+
+        self.query_knn_recursive(first, query, heap, k);
+        self.query_knn_recursive(second, query, heap, k);
+    }
+
+    pub fn kernel_density(&self, queries: &NdArray<f64>, bandwidth: f64, kernel: KernelType) -> NdArray<f64> {
+        let shape = queries.shape().dims();
+        assert!(shape.len() == 2, "Expected 2D array (n_queries, dim)");
+
+        let n_queries = shape[0];
+        let dim = shape[1];
+        assert_eq!(dim, self.dim, "Query dimension must match tree dimension");
+
+        let mut results = vec![0.0; n_queries];
+
+        for i in 0..n_queries {
+            let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+            let mut density = 0.0;
+            self.kde_recursive(0, query, bandwidth, &mut density, kernel);
+            results[i] = density;
+        }
+
+        NdArray::from_vec(Shape::new(vec![n_queries]), results)
+    }
+
+    fn kde_recursive(&self, node_idx: usize, query: &[f64], h: f64, density: &mut f64, kernel: KernelType) {
+        let node = &self.nodes[node_idx];
+        let min_dist = self.min_dist_to_node(query, &node);
+
+        if kernel.evaluate(min_dist, h) < 1e-10 {
+            return;
+        }
+
+        if node.left.is_none() {
+            for i in node.start..node.end {
+                let dist = self.metric.distance(query, self.get_point(i));
+                *density += kernel.evaluate(dist, h);
+            }
+            return;
+        }
+
+        if let Some(left) = node.left {
+            self.kde_recursive(left, query, h, density, kernel);
+        }
+        if let Some(right) = node.right {
+            self.kde_recursive(right, query, h, density, kernel);
+        }
     }
 }

@@ -241,7 +241,7 @@ mod tests {
     }
 
     #[test]
-    fn randint_in_range() {
+    pub fn randint_in_range() {
         let mut rng = Generator::from_seed(42);
         let arr = rng.randint(-10, 10, Shape::d1(1000));
 

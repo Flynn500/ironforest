@@ -86,6 +86,18 @@ impl<T> NdArray<T> {
     }
 }
 
+impl<T: Copy> NdArray<T> {
+    pub fn item(&self) -> T {
+        assert_eq!(
+            self.len(),
+            1,
+            "item() can only be called on arrays with exactly one element, got {} elements",
+            self.len()
+        );
+        self.as_slice()[0]
+    }
+}
+
 impl<T: Clone> NdArray<T> {
     pub fn filled(shape: Shape, value: T) -> Self {
         let storage = Storage::filled(value, shape.size());
@@ -660,5 +672,40 @@ mod tests {
                     col, i, av.as_slice()[i], expected);
             }
         }
+    }
+
+    // item() tests
+    #[test]
+    fn item_scalar_1d() {
+        let scalar = NdArray::from_vec(Shape::d1(1), vec![42]);
+        assert_eq!(scalar.item(), 42);
+    }
+
+    #[test]
+    fn item_scalar_2d() {
+        let scalar = NdArray::from_vec(Shape::d2(1, 1), vec![3.14]);
+        assert_eq!(scalar.item(), 3.14);
+    }
+
+    #[test]
+    fn item_dot_product_result() {
+        let a = NdArray::from_vec(Shape::d1(3), vec![1.0, 2.0, 3.0]);
+        let b = NdArray::from_vec(Shape::d1(3), vec![4.0, 5.0, 6.0]);
+        let result = a.dot(&b);
+        assert_eq!(result.item(), 32.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "item() can only be called on arrays with exactly one element")]
+    fn item_non_scalar_panics() {
+        let arr = NdArray::from_vec(Shape::d1(3), vec![1, 2, 3]);
+        arr.item();
+    }
+
+    #[test]
+    #[should_panic(expected = "item() can only be called on arrays with exactly one element")]
+    fn item_empty_panics() {
+        let arr: NdArray<i32> = NdArray::from_vec(Shape::d1(0), vec![]);
+        arr.item();
     }
 }
