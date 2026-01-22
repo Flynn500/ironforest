@@ -30,10 +30,12 @@ def benchmark_tree(
         build_times.append(t1 - t0)
 
         t0 = time.perf_counter()
-        _ = tree.kernel_density(
+        _ = tree.kernel_density_approx(
             queries,
             bandwidth=bandwidth,
             kernel="gaussian",
+            criterion="min_samples",
+            min_samples=100
         )
         t1 = time.perf_counter()
         query_times.append(t1 - t0)

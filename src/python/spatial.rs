@@ -167,6 +167,109 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                     Ok(PyArray { inner: result }.into_pyobject(py)?.into_any().unbind())
                 }
             }
+
+            #[pyo3(signature = (queries=None, bandwidth=1.0, kernel="gaussian", criterion="none", min_samples=None, max_span=None))]
+            fn kernel_density_approx(
+                &self,
+                py: Python<'_>,
+                queries: Option<&Bound<'_, PyAny>>,
+                bandwidth: Option<f64>,
+                kernel: Option<&str>,
+                criterion: Option<&str>,
+                min_samples: Option<usize>,
+                max_span: Option<f64>,
+            ) -> PyResult<Py<PyAny>> {
+                let bandwidth = bandwidth.unwrap_or(1.0);
+                let kernel_type = parse_kernel(kernel.unwrap_or("gaussian"))?;
+
+                let approx_criterion = match criterion.unwrap_or("none").to_lowercase().as_str() {
+                    "none" => ApproxCriterion::None,
+                    "min_samples" => {
+                        let samples = min_samples.ok_or_else(||
+                            PyValueError::new_err("min_samples parameter required for 'min_samples' criterion")
+                        )?;
+                        ApproxCriterion::MinSamples(samples)
+                    },
+                    "max_span" => {
+                        let span = max_span.ok_or_else(||
+                            PyValueError::new_err("max_span parameter required for 'max_span' criterion")
+                        )?;
+                        ApproxCriterion::MaxSpan(span)
+                    },
+                    "combined" => {
+                        let samples = min_samples.ok_or_else(||
+                            PyValueError::new_err("min_samples parameter required for 'combined' criterion")
+                        )?;
+                        let span = max_span.ok_or_else(||
+                            PyValueError::new_err("max_span parameter required for 'combined' criterion")
+                        )?;
+                        ApproxCriterion::Combined(samples, span)
+                    },
+                    _ => return Err(PyValueError::new_err(format!(
+                        "Unknown approximation criterion '{}'. Valid options: 'none', 'min_samples', 'max_span', 'combined'",
+                        criterion.unwrap_or("none")
+                    ))),
+                };
+
+                let queries_arr = if let Some(q) = queries {
+                    if let Ok(scalar) = q.extract::<f64>() {
+                        NdArray::from_vec(Shape::new(vec![1, 1]), vec![scalar])
+                    } else if let Ok(arr) = q.extract::<PyArray>() {
+                        let shape = arr.inner.shape().dims();
+                        if shape.len() == 1 {
+                            if shape[0] != self.inner.dim {
+                                return Err(PyValueError::new_err(format!(
+                                    "Query dimension {} doesn't match tree dimension {}",
+                                    shape[0], self.inner.dim
+                                )));
+                            }
+                            NdArray::from_vec(
+                                Shape::new(vec![1, shape[0]]),
+                                arr.inner.as_slice().to_vec()
+                            )
+                        } else if shape.len() == 2 {
+                            if shape[1] != self.inner.dim {
+                                return Err(PyValueError::new_err(format!(
+                                    "Query dimension {} doesn't match tree dimension {}",
+                                    shape[1], self.inner.dim
+                                )));
+                            }
+                            arr.inner.clone()
+                        } else {
+                            return Err(PyValueError::new_err(
+                                "queries must be 1D or 2D array"
+                            ));
+                        }
+                    } else if let Ok(vec_data) = q.extract::<Vec<f64>>() {
+                        let n = vec_data.len();
+                        if n == self.inner.dim {
+                            NdArray::from_vec(Shape::new(vec![1, n]), vec_data)
+                        } else {
+                            return Err(PyValueError::new_err(format!(
+                                "Query vector length {} doesn't match tree dimension {}",
+                                n, self.inner.dim
+                            )));
+                        }
+                    } else {
+                        return Err(PyValueError::new_err(
+                            "queries must be a scalar, list, or Array"
+                        ));
+                    }
+                } else {
+                    NdArray::from_vec(
+                        Shape::new(vec![self.inner.n_points, self.inner.dim]),
+                        self.inner.data.clone()
+                    )
+                };
+
+                let result = self.inner.kernel_density_approx(&queries_arr, bandwidth, kernel_type, &approx_criterion);
+
+                if result.shape().dims()[0] == 1 {
+                    Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
+                } else {
+                    Ok(PyArray { inner: result }.into_pyobject(py)?.into_any().unbind())
+                }
+            }
         }
 
         #[pyclass(name = "KDTree")]
@@ -507,6 +610,109 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                 };
 
                 let result = self.inner.kernel_density(&queries_arr, bandwidth, kernel_type);
+
+                if result.shape().dims()[0] == 1 {
+                    Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
+                } else {
+                    Ok(PyArray { inner: result }.into_pyobject(py)?.into_any().unbind())
+                }
+            }
+
+            #[pyo3(signature = (queries=None, bandwidth=1.0, kernel="gaussian", criterion="none", min_samples=None, max_span=None))]
+            fn kernel_density_approx(
+                &self,
+                py: Python<'_>,
+                queries: Option<&Bound<'_, PyAny>>,
+                bandwidth: Option<f64>,
+                kernel: Option<&str>,
+                criterion: Option<&str>,
+                min_samples: Option<usize>,
+                max_span: Option<f64>,
+            ) -> PyResult<Py<PyAny>> {
+                let bandwidth = bandwidth.unwrap_or(1.0);
+                let kernel_type = parse_kernel(kernel.unwrap_or("gaussian"))?;
+
+                let approx_criterion = match criterion.unwrap_or("none").to_lowercase().as_str() {
+                    "none" => ApproxCriterion::None,
+                    "min_samples" => {
+                        let samples = min_samples.ok_or_else(||
+                            PyValueError::new_err("min_samples parameter required for 'min_samples' criterion")
+                        )?;
+                        ApproxCriterion::MinSamples(samples)
+                    },
+                    "max_span" => {
+                        let span = max_span.ok_or_else(||
+                            PyValueError::new_err("max_span parameter required for 'max_span' criterion")
+                        )?;
+                        ApproxCriterion::MaxSpan(span)
+                    },
+                    "combined" => {
+                        let samples = min_samples.ok_or_else(||
+                            PyValueError::new_err("min_samples parameter required for 'combined' criterion")
+                        )?;
+                        let span = max_span.ok_or_else(||
+                            PyValueError::new_err("max_span parameter required for 'combined' criterion")
+                        )?;
+                        ApproxCriterion::Combined(samples, span)
+                    },
+                    _ => return Err(PyValueError::new_err(format!(
+                        "Unknown approximation criterion '{}'. Valid options: 'none', 'min_samples', 'max_span', 'combined'",
+                        criterion.unwrap_or("none")
+                    ))),
+                };
+
+                let queries_arr = if let Some(q) = queries {
+                    if let Ok(scalar) = q.extract::<f64>() {
+                        NdArray::from_vec(Shape::new(vec![1, 1]), vec![scalar])
+                    } else if let Ok(arr) = q.extract::<PyArray>() {
+                        let shape = arr.inner.shape().dims();
+                        if shape.len() == 1 {
+                            if shape[0] != self.inner.dim {
+                                return Err(PyValueError::new_err(format!(
+                                    "Query dimension {} doesn't match tree dimension {}",
+                                    shape[0], self.inner.dim
+                                )));
+                            }
+                            NdArray::from_vec(
+                                Shape::new(vec![1, shape[0]]),
+                                arr.inner.as_slice().to_vec()
+                            )
+                        } else if shape.len() == 2 {
+                            if shape[1] != self.inner.dim {
+                                return Err(PyValueError::new_err(format!(
+                                    "Query dimension {} doesn't match tree dimension {}",
+                                    shape[1], self.inner.dim
+                                )));
+                            }
+                            arr.inner.clone()
+                        } else {
+                            return Err(PyValueError::new_err(
+                                "queries must be 1D or 2D array"
+                            ));
+                        }
+                    } else if let Ok(vec_data) = q.extract::<Vec<f64>>() {
+                        let n = vec_data.len();
+                        if n == self.inner.dim {
+                            NdArray::from_vec(Shape::new(vec![1, n]), vec_data)
+                        } else {
+                            return Err(PyValueError::new_err(format!(
+                                "Query vector length {} doesn't match tree dimension {}",
+                                n, self.inner.dim
+                            )));
+                        }
+                    } else {
+                        return Err(PyValueError::new_err(
+                            "queries must be a scalar, list, or Array"
+                        ));
+                    }
+                } else {
+                    NdArray::from_vec(
+                        Shape::new(vec![self.inner.n_points, self.inner.dim]),
+                        self.inner.data.clone()
+                    )
+                };
+
+                let result = self.inner.kernel_density_approx(&queries_arr, bandwidth, kernel_type, approx_criterion);
 
                 if result.shape().dims()[0] == 1 {
                     Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())

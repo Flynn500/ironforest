@@ -660,6 +660,118 @@ class spatial:
             """
             ...
 
+        @overload
+        def kernel_density_approx(
+            self,
+            queries: float | Sequence[float],
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            criterion: Literal["none", "min_samples", "max_span", "combined"] = "none",
+            min_samples: int | None = None,
+            max_span: float | None = None
+        ) -> float:
+            """Estimate kernel density at a single query point with approximation.
+
+            Uses tree structure to approximate density by aggregating contributions
+            from groups of points, controlled by the approximation criterion.
+
+            Args:
+                queries: Single query point as a scalar (for 1D data) or list of coordinates.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+                criterion: Approximation criterion for early stopping. Options are:
+                    - "none": No approximation, compute exact density (default)
+                    - "min_samples": Stop when node has fewer than min_samples points
+                    - "max_span": Stop when node span is less than max_span
+                    - "combined": Stop when either min_samples or max_span is satisfied
+                min_samples: Minimum samples threshold (required for "min_samples" or "combined").
+                max_span: Maximum span threshold (required for "max_span" or "combined").
+
+            Returns:
+                Approximate density estimate at the query point (float).
+            """
+            ...
+
+        @overload
+        def kernel_density_approx(
+            self,
+            queries: Array,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            criterion: Literal["none", "min_samples", "max_span", "combined"] = "none",
+            min_samples: int | None = None,
+            max_span: float | None = None
+        ) -> List:
+            """Estimate kernel density at multiple query points with approximation.
+
+            Uses tree structure to approximate density by aggregating contributions
+            from groups of points, controlled by the approximation criterion.
+
+            Args:
+                queries: 2D array of query points with shape (n_queries, n_features),
+                    or 1D array representing a single point.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+                criterion: Approximation criterion for early stopping. Options are:
+                    - "none": No approximation, compute exact density (default)
+                    - "min_samples": Stop when node has fewer than min_samples points
+                    - "max_span": Stop when node span is less than max_span
+                    - "combined": Stop when either min_samples or max_span is satisfied
+                min_samples: Minimum samples threshold (required for "min_samples" or "combined").
+                max_span: Maximum span threshold (required for "max_span" or "combined").
+
+            Returns:
+                1D Array of approximate density estimates, one for each query point.
+            """
+            ...
+
+        @overload
+        def kernel_density_approx(
+            self,
+            queries: None = None,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            criterion: Literal["none", "min_samples", "max_span", "combined"] = "none",
+            min_samples: int | None = None,
+            max_span: float | None = None
+        ) -> List:
+            """Estimate kernel density at all training points with approximation (leave-one-out).
+
+            Uses tree structure to approximate density by aggregating contributions
+            from groups of points, controlled by the approximation criterion.
+
+            Args:
+                queries: If None, computes density at each training point.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+                criterion: Approximation criterion for early stopping. Options are:
+                    - "none": No approximation, compute exact density (default)
+                    - "min_samples": Stop when node has fewer than min_samples points
+                    - "max_span": Stop when node span is less than max_span
+                    - "combined": Stop when either min_samples or max_span is satisfied
+                min_samples: Minimum samples threshold (required for "min_samples" or "combined").
+                max_span: Maximum span threshold (required for "max_span" or "combined").
+
+            Returns:
+                1D Array of approximate density estimates at each training point.
+            """
+            ...
+
     class KDTree:
         """KD-tree for efficient nearest neighbor queries.
 
@@ -794,6 +906,118 @@ class spatial:
 
             Returns:
                 1D Array of density estimates at each training point.
+            """
+            ...
+
+        @overload
+        def kernel_density_approx(
+            self,
+            queries: float | Sequence[float],
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            criterion: Literal["none", "min_samples", "max_span", "combined"] = "none",
+            min_samples: int | None = None,
+            max_span: float | None = None
+        ) -> float:
+            """Estimate kernel density at a single query point with approximation.
+
+            Uses tree structure to approximate density by aggregating contributions
+            from groups of points, controlled by the approximation criterion.
+
+            Args:
+                queries: Single query point as a scalar (for 1D data) or list of coordinates.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+                criterion: Approximation criterion for early stopping. Options are:
+                    - "none": No approximation, compute exact density (default)
+                    - "min_samples": Stop when node has fewer than min_samples points
+                    - "max_span": Stop when node span is less than max_span
+                    - "combined": Stop when either min_samples or max_span is satisfied
+                min_samples: Minimum samples threshold (required for "min_samples" or "combined").
+                max_span: Maximum span threshold (required for "max_span" or "combined").
+
+            Returns:
+                Approximate density estimate at the query point (float).
+            """
+            ...
+
+        @overload
+        def kernel_density_approx(
+            self,
+            queries: Array,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            criterion: Literal["none", "min_samples", "max_span", "combined"] = "none",
+            min_samples: int | None = None,
+            max_span: float | None = None
+        ) -> List:
+            """Estimate kernel density at multiple query points with approximation.
+
+            Uses tree structure to approximate density by aggregating contributions
+            from groups of points, controlled by the approximation criterion.
+
+            Args:
+                queries: 2D array of query points with shape (n_queries, n_features),
+                    or 1D array representing a single point.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+                criterion: Approximation criterion for early stopping. Options are:
+                    - "none": No approximation, compute exact density (default)
+                    - "min_samples": Stop when node has fewer than min_samples points
+                    - "max_span": Stop when node span is less than max_span
+                    - "combined": Stop when either min_samples or max_span is satisfied
+                min_samples: Minimum samples threshold (required for "min_samples" or "combined").
+                max_span: Maximum span threshold (required for "max_span" or "combined").
+
+            Returns:
+                1D Array of approximate density estimates, one for each query point.
+            """
+            ...
+
+        @overload
+        def kernel_density_approx(
+            self,
+            queries: None = None,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            criterion: Literal["none", "min_samples", "max_span", "combined"] = "none",
+            min_samples: int | None = None,
+            max_span: float | None = None
+        ) -> List:
+            """Estimate kernel density at all training points with approximation (leave-one-out).
+
+            Uses tree structure to approximate density by aggregating contributions
+            from groups of points, controlled by the approximation criterion.
+
+            Args:
+                queries: If None, computes density at each training point.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+                criterion: Approximation criterion for early stopping. Options are:
+                    - "none": No approximation, compute exact density (default)
+                    - "min_samples": Stop when node has fewer than min_samples points
+                    - "max_span": Stop when node span is less than max_span
+                    - "combined": Stop when either min_samples or max_span is satisfied
+                min_samples: Minimum samples threshold (required for "min_samples" or "combined").
+                max_span: Maximum span threshold (required for "max_span" or "combined").
+
+            Returns:
+                1D Array of approximate density estimates at each training point.
             """
             ...
 
@@ -937,5 +1161,117 @@ class spatial:
 
             Returns:
                 1D Array of density estimates at each training point.
+            """
+            ...
+
+        @overload
+        def kernel_density_approx(
+            self,
+            queries: float | Sequence[float],
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            criterion: Literal["none", "min_samples", "max_span", "combined"] = "none",
+            min_samples: int | None = None,
+            max_span: float | None = None
+        ) -> float:
+            """Estimate kernel density at a single query point with approximation.
+
+            Uses tree structure to approximate density by aggregating contributions
+            from groups of points, controlled by the approximation criterion.
+
+            Args:
+                queries: Single query point as a scalar (for 1D data) or list of coordinates.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+                criterion: Approximation criterion for early stopping. Options are:
+                    - "none": No approximation, compute exact density (default)
+                    - "min_samples": Stop when node has fewer than min_samples points
+                    - "max_span": Stop when node span is less than max_span
+                    - "combined": Stop when either min_samples or max_span is satisfied
+                min_samples: Minimum samples threshold (required for "min_samples" or "combined").
+                max_span: Maximum span threshold (required for "max_span" or "combined").
+
+            Returns:
+                Approximate density estimate at the query point (float).
+            """
+            ...
+
+        @overload
+        def kernel_density_approx(
+            self,
+            queries: Array,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            criterion: Literal["none", "min_samples", "max_span", "combined"] = "none",
+            min_samples: int | None = None,
+            max_span: float | None = None
+        ) -> List:
+            """Estimate kernel density at multiple query points with approximation.
+
+            Uses tree structure to approximate density by aggregating contributions
+            from groups of points, controlled by the approximation criterion.
+
+            Args:
+                queries: 2D array of query points with shape (n_queries, n_features),
+                    or 1D array representing a single point.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+                criterion: Approximation criterion for early stopping. Options are:
+                    - "none": No approximation, compute exact density (default)
+                    - "min_samples": Stop when node has fewer than min_samples points
+                    - "max_span": Stop when node span is less than max_span
+                    - "combined": Stop when either min_samples or max_span is satisfied
+                min_samples: Minimum samples threshold (required for "min_samples" or "combined").
+                max_span: Maximum span threshold (required for "max_span" or "combined").
+
+            Returns:
+                1D Array of approximate density estimates, one for each query point.
+            """
+            ...
+
+        @overload
+        def kernel_density_approx(
+            self,
+            queries: None = None,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            criterion: Literal["none", "min_samples", "max_span", "combined"] = "none",
+            min_samples: int | None = None,
+            max_span: float | None = None
+        ) -> List:
+            """Estimate kernel density at all training points with approximation (leave-one-out).
+
+            Uses tree structure to approximate density by aggregating contributions
+            from groups of points, controlled by the approximation criterion.
+
+            Args:
+                queries: If None, computes density at each training point.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+                criterion: Approximation criterion for early stopping. Options are:
+                    - "none": No approximation, compute exact density (default)
+                    - "min_samples": Stop when node has fewer than min_samples points
+                    - "max_span": Stop when node span is less than max_span
+                    - "combined": Stop when either min_samples or max_span is satisfied
+                min_samples: Minimum samples threshold (required for "min_samples" or "combined").
+                max_span: Maximum span threshold (required for "max_span" or "combined").
+
+            Returns:
+                1D Array of approximate density estimates at each training point.
             """
             ...

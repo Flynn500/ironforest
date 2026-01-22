@@ -106,6 +106,7 @@ def test_ball_tree():
     print(f"Query point: {query_point}, k: {k}")
     print(f"KNN indices (Chebyshev): {knn_indices}")
 
+
 def test_column_stack():
     print("\n\nTesting column_stack...")
 
@@ -167,6 +168,10 @@ def test_kernel_density():
     # Test 1: Single point query (should return float)
     print("\nTest 1: Single point query [0.5, 0.5]")
     density_single = tree.kernel_density([0.5, 0.5], bandwidth=0.5, kernel="gaussian")
+    print(f"  Type: {type(density_single)}")
+    print(f"  Density: {density_single}")
+    print("approx:\n")
+    density_single = tree.kernel_density_approx([0.5, 0.5], bandwidth=0.5, kernel="gaussian", criterion="max_span", max_span=10)
     print(f"  Type: {type(density_single)}")
     print(f"  Density: {density_single}")
 
