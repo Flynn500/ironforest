@@ -14,15 +14,15 @@ You can also build with `maturin build --release` assuming maturin is installed.
 ## Quickstart
 
 ```python
-import substratum as ss
+import substratum as sx
 
-a = ss.Array([2, 2], [1.0, 2.0, 3.0, 4.0])
-b = ss.Array([2, 2], [5.0, 6.0, 7.0, 8.0])
+a = sx.Array([2, 2], [1.0, 2.0, 3.0, 4.0])
+b = sx.Array([2, 2], [5.0, 6.0, 7.0, 8.0])
 
 print(f"a @ b = {(a @ b).tolist()}")
 ```
 Output: 
-`a @ b = [19.0, 22.0, 43.0, 50.0]`
+`a @ b = [[19.0, 22.0], [43.0, 50.0]]`
 
 ## Features
 - Array, an N-dimensional array object. 
@@ -44,23 +44,23 @@ Output:
 
 ## Examples
 ```python
-import substratum as ss
+import substratum as sx
 
-a = ss.Array([2, 2], [1.0, 2.0, 3.0, 4.0])
-b = ss.Array([2, 2], [5.0, 6.0, 7.0, 8.0])
+a = sx.Array([2, 2], [1.0, 2.0, 3.0, 4.0])
+b = sx.Array([2, 2], [5.0, 6.0, 7.0, 8.0])
 
 print(f"a + b = {(a + b).tolist()}")
 print(f"a * b = {(a * b).tolist()}")
 ```
 Output: 
 `
-a + b = [6.0, 8.0, 10.0, 12.0]
-a * b = [5.0, 12.0, 21.0, 32.0]
+a + b = [[6.0, 8.0], [10.0, 12.0]]
+a * b = [[5.0, 12.0], [21.0, 32.0]]
 `
 ```python
-import substratum as ss
+import substratum as sx
 
-gen = ss.Generator.from_seed(123)
+gen = sx.Generator.from_seed(123)
 
 uniform = gen.uniform(0.0, 1.0, [2, 3])
 print(f"Uniform [0, 1): {uniform.tolist()}")
