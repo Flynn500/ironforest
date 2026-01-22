@@ -25,13 +25,13 @@ Output:
 `a @ b = [[19.0, 22.0], [43.0, 50.0]]`
 
 ## Features
-- Array, an N-dimensional array object. 
-- Broadcast operations and trig methods for arrays
-- Statistical methods (mean, var, quantile)
-- Pearson and Spearman correlation
-- matrix methods and constructors
+- Array, an N-dimensional array object
+- Array broadcasting and trig methods
+- matrix operations and constructors
 - cholesky, qr and eigen decomposition
 - KDTree, BallTree & VPTree with knn radius and KDE queries
+- Statistical methods (mean, median, var, quantile)
+- Pearson and Spearman correlation
 
 ### Top-level
 - `substratum.Array`

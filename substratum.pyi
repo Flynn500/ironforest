@@ -1,4 +1,4 @@
-"""A Rust-based ndarray library. """
+"""A library for array-based computation."""
 
 from typing import Iterator, List, Literal, Sequence, Tuple, overload
 
