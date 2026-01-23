@@ -312,7 +312,7 @@ class Array(Sequence[float]):
         ...
 
     def tolist(self) -> List[float]:
-        """Return data as flat list."""
+        """Return data as nested list."""
         ...
 
     def diagonal(self, k: int | None = None) -> Array:
