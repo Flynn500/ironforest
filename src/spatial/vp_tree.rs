@@ -81,6 +81,11 @@ impl VPTree {
         &self.data[i * self.dim..(i + 1) * self.dim]
     }
 
+    fn get_point_from_idx(&self, i: usize) -> &[f64] {
+        let original_idx = self.indices[i];
+        &self.data[original_idx * self.dim..(original_idx + 1) * self.dim]
+    }
+
     fn reorder_data(&mut self) {
         let mut new_data = vec![0.0; self.data.len()];
         
@@ -101,11 +106,11 @@ impl VPTree {
         let mut min = f64::INFINITY;
         let mut max = f64::NEG_INFINITY;
 
-        let vantage_point = self.get_point(start).to_vec();
+        let vantage_point = self.get_point_from_idx(start).to_vec();
 
         let mut idx_dist: Vec<(usize, f64)> = (start + 1..end)
             .map(|i| {
-                let p = self.get_point(i);
+                let p = self.get_point_from_idx(i);
                 let dist = self.metric.distance(p, &vantage_point);
                 min = min.min(dist);
                 max = max.max(dist);

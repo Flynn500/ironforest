@@ -67,12 +67,17 @@ impl BallTree {
         &self.data[i * self.dim..(i + 1) * self.dim]
     }
 
-    fn compute_bounding_ball(&self, start: usize, end: usize) -> (Vec<f64>, f64) {
+    fn get_point_from_idx(&self, i: usize) -> &[f64] {
+        let original_idx = self.indices[i];
+        &self.data[original_idx * self.dim..(original_idx + 1) * self.dim]
+    }
+
+    fn init_node(&self, start: usize, end: usize) -> (Vec<f64>, f64) {
         let n = (end - start) as f64;
         let mut centroid = vec![0.0; self.dim];
 
         for i in start..end {
-            let p = self.get_point(i);
+            let p = self.get_point_from_idx(i);
             for (j, &x) in p.iter().enumerate() {
                 centroid[j] += x;
             }
@@ -104,7 +109,7 @@ impl BallTree {
             let mut max_val = f64::NEG_INFINITY;
             
             for i in start..end {
-                let val = self.get_point(i)[d];
+                let val = self.get_point_from_idx(i)[d];
                 min_val = min_val.min(val);
                 max_val = max_val.max(val);
             }
@@ -120,7 +125,7 @@ impl BallTree {
 
     fn partition(&mut self, start: usize, end: usize, dim: usize) -> usize {
         let mut slots_by_key: Vec<(f64, usize)> = (start..end)
-            .map(|slot| (self.get_point(slot)[dim], slot))
+            .map(|slot| (self.get_point_from_idx(slot)[dim], slot))
             .collect();
 
         let mid_offset = (end - start) / 2;
@@ -141,7 +146,7 @@ impl BallTree {
 
 
     fn build_recursive(&mut self, start: usize, end: usize) -> usize {
-        let (center, radius) = self.compute_bounding_ball(start, end);
+        let (center, radius) = self.init_node(start, end);
         
         let node_idx = self.nodes.len();
 

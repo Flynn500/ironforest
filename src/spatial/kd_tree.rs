@@ -69,13 +69,18 @@ impl KDTree {
     fn get_point(&self, i: usize) -> &[f64] {
         &self.data[i * self.dim..(i + 1) * self.dim]
     }
-    
+
+    fn get_point_from_idx(&self, i: usize) -> &[f64] {
+        let original_idx = self.indices[i];
+        &self.data[original_idx * self.dim..(original_idx + 1) * self.dim]
+    }
+
     fn init_node(&self, start: usize, end: usize) -> (Vec<f64>, Vec<f64>, usize) {
         let mut min = vec![f64::INFINITY; self.dim];
         let mut max = vec![f64::NEG_INFINITY; self.dim];
 
         for i in start..end {
-            let p = self.get_point(i);
+            let p = self.get_point_from_idx(i);
             for (j, &x) in p.iter().enumerate() {
                 max[j] = max[j].max(x);
                 min[j] = min[j].min(x);
@@ -97,7 +102,7 @@ impl KDTree {
 
     fn partition(&mut self, start: usize, end: usize, dim: usize) -> usize {
         let mut slots: Vec<(f64, usize)> = (start..end)
-            .map(|slot| (self.get_point(slot)[dim], slot))
+            .map(|slot| (self.get_point_from_idx(slot)[dim], slot))
             .collect();
 
         let mid_offset = (end - start) / 2;
@@ -139,7 +144,7 @@ impl KDTree {
         }
 
         let mut mid = self.partition(start, end, axis);
-        let split = self.get_point(mid)[axis];
+        let split = self.get_point_from_idx(mid)[axis];
         self.nodes[node_idx].split = split;
 
         if mid == start {
