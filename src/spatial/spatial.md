@@ -10,7 +10,27 @@ The spatial module holds a variety of tree structures, each possesing kNN, raidu
   - R-Tree
 - Simple Clustering Algorithms
   - K-Means
-  - DBScan   
+  - DBScan
+ 
+## Performance
+
+I benchmarked my trees against SKlearn by sampling 100,000 points uniformly between 0-1. We then ran 500 batched KDE queries for each tree using euclidian distance and gaussian kernels.
+
+KDTree       | SKlearn      |  substratum
+-------------|--------------|-------------
+build_min    | 0.038591 sec | 0.012436 sec
+build_mean   | 0.040955 sec | 0.014963 sec
+query_min    | 0.929484 sec | 0.607634 sec
+query_mean   | 0.986913 sec | 0.635967 sec
+
+
+BallTree       | SKlearn      |  substratum
+-------------|--------------|-------------
+build_min    | 0.037026 sec | 0.019365 sec
+build_mean   | 0.038487 sec | 0.014963 sec
+query_min    | 0.948515 sec | 0.607534 sec
+query_mean   | 0.996769 sec | 0.639607 sec
+
 
 ## Optmizations
 The biggest speedup I've implemented so far was making the trees more cache friendly. Previously the data array remained untouched, while we manipulated an index array to deal with in-tree computations. This seemed fine in principle as we want to return the indices as our result, but it is not cache friendly. After adding a reorder function we increased speeds by 30% across queries. This function just rearranges our data vector so that nodes close to each other a stored nearby. This makes it easier for the CPU to cache values as we aren't jumping to random points in our arrays.
