@@ -1,10 +1,12 @@
 import time
 import substratum as ss
+import numpy as np
+from sklearn.neighbors import KDTree, BallTree
 
 
 def benchmark_tree(
     n_points=100_000,
-    n_queries=1_000,
+    n_queries=500,
     dim=2,
     leaf_size=32,
     bandwidth=0.5,
@@ -21,7 +23,7 @@ def benchmark_tree(
 
     for _ in range(runs):
         t0 = time.perf_counter()
-        tree = ss.spatial.VPTree.from_array(
+        tree = ss.spatial.KDTree.from_array(
             points,
             leaf_size=leaf_size,
             metric="euclidean",
@@ -37,6 +39,11 @@ def benchmark_tree(
             criterion="min_samples",
             min_samples=100
         )
+        # _ = tree.kernel_density(
+        #     queries,
+        #     bandwidth=bandwidth,
+        #     kernel="gaussian",
+        # )
         t1 = time.perf_counter()
         query_times.append(t1 - t0)
 
@@ -49,22 +56,65 @@ def benchmark_tree(
 
 if __name__ == "__main__":
     result = benchmark_tree(
-        n_points=200_000,
-        n_queries=1000,
+        n_points=100_000,
+        n_queries=500,
         dim=2,
         leaf_size=32,
         runs=10,
     )
 
-    print("VPTree benchmark results:")
+    print(" benchmark results:")
     for k, v in result.items():
         print(f"{k:>12}: {v:.6f} sec")
 
 """
+
+SKlearn vs substratum
+KDE Query - Gaussian, Euclidian
+n_points=100_000,
+n_queries=500
+
+substratum KDTree benchmark results:
+   build_min: 0.012436 sec
+  build_mean: 0.014963 sec
+   query_min: 0.607634 sec
+  query_mean: 0.635967 sec
+
+substratum benchmark results:
+   build_min: 0.019365 sec
+  build_mean: 0.022635 sec
+   query_min: 0.607534 sec
+  query_mean: 0.639607 sec
+
+substratum KDTree approx benchmark results: min_samples = 100 
+   build_min: 0.013954 sec
+  build_mean: 0.014673 sec
+   query_min: 0.000024 sec
+  query_mean: 0.000034 sec
+
+substratum BallTree approx benchmark results: min_samples = 100
+   build_min: 0.019431 sec
+  build_mean: 0.020502 sec
+   query_min: 0.000026 sec
+  query_mean: 0.000040 sec
+
+
+sklearn KDTree benchmark results:
+   build_min: 0.038591 sec
+  build_mean: 0.040955 sec
+   query_min: 0.929484 sec
+  query_mean: 0.986913 sec
+
+sklearn BallTree benchmark results:
+   build_min: 0.037026 sec
+  build_mean: 0.038487 sec
+   query_min: 0.948515 sec
+  query_mean: 0.996769 sec
+
+
 KDE Query - Gaussian, Euclidian
 n_points=200_000,
 n_queries=1000,
-
 
 old cache hating implementation:
 
