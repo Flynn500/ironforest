@@ -25,12 +25,12 @@ Output:
 `a @ b = [[19.0, 22.0], [43.0, 50.0]]`
 
 ## Features
-- Array, an N-dimensional array object
-- Array broadcasting and trig methods
+- Array, an N-dimensional array object with broadcasting
 - matrix operations and constructors
 - cholesky, qr and eigen decomposition
-- KDTree, BallTree & VPTree with knn radius and KDE queries
-- Statistical methods (mean, median, var, quantile)
+- Least Squares & Weighted Least Squares Solver
+- KDTree, BallTree & VPTree with knn radius KDE and KDE approx queries
+- Statistical methods (mean, median, var, std, quantile)
 - Pearson and Spearman correlation
 
 ### Top-level
@@ -80,6 +80,7 @@ Standard normal: [-0.0008585765206425146, 1.4733334715623352, -1.16180050645278,
 ### Linalg
 - Standard matrix methods and constructors.
 - cholesky and eigen and qr decomposition.
+- Least Squares & Weighted Least Squares solver.
 
 ### Stats
 - Basic statistical methods for `Array` objects, mean, var and quantile.

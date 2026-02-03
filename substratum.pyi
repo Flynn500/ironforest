@@ -1,6 +1,6 @@
 """A library for array-based computation."""
 
-from typing import Iterator, List, Literal, Sequence, Tuple, overload
+from typing import Iterator, List, Literal, Sequence, Tuple, overload, Any
 
 class linalg:
     """Linear algebra functions."""
@@ -383,6 +383,29 @@ class Array(Sequence[float]):
         """Convert a single-element array into a float."""
         ...
 
+    @staticmethod
+    def from_numpy(arr: Any) -> Array:
+        """Convert a numpy array to a substratum Array.
+
+        Args:
+            arr: A numpy ndarray of dtype float64.
+
+        Returns:
+            A new Array containing the same data and shape as the numpy array.
+
+        Raises:
+            ValueError: If the numpy array cannot be converted (wrong dtype, etc.).
+        """
+        ...
+
+    def to_numpy(self) -> Any:
+        """Convert this Array to a numpy ndarray.
+
+        Returns:
+            A numpy ndarray of dtype float64 with the same shape and data.
+        """
+        ...
+
     def matmul(self, other: Array) -> Array:
         """Matrix multiplication."""
         ...
@@ -617,7 +640,7 @@ class spatial:
             """
             ...
 
-        def query_knn(self, query: float | Sequence[float] | Array, k: int) -> List:
+        def query_knn(self, query: float | Sequence[float] | Array, k: int) -> List[Tuple[int, float]]:
             """Find the k nearest neighbors to the query point.
 
             Args:
@@ -625,8 +648,8 @@ class spatial:
                 k: Number of nearest neighbors to return.
 
             Returns:
-                1D Array of row indices (as floats) for the k nearest neighbors,
-                sorted by distance (closest first). These indices can be used to look up
+                List of tuples (index, distance) for the k nearest neighbors,
+                sorted by distance (closest first). The indices can be used to look up
                 the actual points in the original data array.
             """
             ...
@@ -866,7 +889,7 @@ class spatial:
             """
             ...
 
-        def query_knn(self, query: float | Sequence[float] | Array, k: int) -> List:
+        def query_knn(self, query: float | Sequence[float] | Array, k: int) -> List[Tuple[int, float]]:
             """Find the k nearest neighbors to the query point.
 
             Args:
@@ -874,8 +897,8 @@ class spatial:
                 k: Number of nearest neighbors to return.
 
             Returns:
-                1D Array of row indices (as floats) for the k nearest neighbors,
-                sorted by distance (closest first). These indices can be used to look up
+                List of tuples (index, distance) for the k nearest neighbors,
+                sorted by distance (closest first). The indices can be used to look up
                 the actual points in the original data array.
             """
             ...
@@ -1121,7 +1144,7 @@ class spatial:
             """
             ...
 
-        def query_knn(self, query: float | Sequence[float] | Array, k: int) -> Array:
+        def query_knn(self, query: float | Sequence[float] | Array, k: int) -> List[Tuple[int, float]]:
             """Find the k nearest neighbors to the query point.
 
             Args:
@@ -1129,8 +1152,8 @@ class spatial:
                 k: Number of nearest neighbors to return.
 
             Returns:
-                1D Array of row indices (as floats) for the k nearest neighbors,
-                sorted by distance (closest first). These indices can be used to look up
+                List of tuples (index, distance) for the k nearest neighbors,
+                sorted by distance (closest first). The indices can be used to look up
                 the actual points in the original data array.
             """
             ...

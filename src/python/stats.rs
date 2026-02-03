@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
-use super::{PyArray, ArrayOrScalar};
+use super::{PyArray, ArrayLike};
 
 pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum, m)?)?;
@@ -43,12 +43,17 @@ fn median(a: &PyArray) -> f64 {
 }
 
 #[pyfunction]
-fn quantile(py: Python<'_>, a: &PyArray, q: ArrayOrScalar) -> PyResult<Py<PyAny>> {
+fn quantile(py: Python<'_>, a: &PyArray, q: ArrayLike) -> PyResult<Py<PyAny>> {
     match q {
-        ArrayOrScalar::Scalar(q) => Ok(a.inner.quantile(q).into_pyobject(py)?.into_any().unbind()),
-        ArrayOrScalar::Array(arr) => Ok(PyArray {
-            inner: a.inner.quantiles(arr.inner.as_slice()),
-        }.into_pyobject(py)?.into_any().unbind()),
+        ArrayLike::Scalar(q_val) => {
+            Ok(a.inner.quantile(q_val).into_pyobject(py)?.into_any().unbind())
+        }
+        _ => {
+            let q_arr = q.into_ndarray()?;
+            Ok(PyArray {
+                inner: a.inner.quantiles(q_arr.as_slice()),
+            }.into_pyobject(py)?.into_any().unbind())
+        }
     }
 }
 

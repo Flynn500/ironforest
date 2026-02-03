@@ -3,7 +3,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::types::{PyAny, PyFloat, PyList, PySlice, PyTuple};
 use numpy::{PyArrayDyn, PyReadonlyArrayDyn, PyUntypedArrayMethods, PyArrayMethods, IntoPyArray};
 use crate::array::{NdArray, Shape};
-use super::{PyArray, VecOrArray, ArrayOrScalar};
+use super::{PyArray, ArrayLike};
 
 #[pymethods]
 impl PyArray {
@@ -30,8 +30,8 @@ impl PyArray {
 
     #[staticmethod]
     #[pyo3(signature = (data, shape=None))]
-    fn asarray(data: VecOrArray, shape: Option<Vec<usize>>) -> PyResult<Self> {
-        let data_vec = data.into_vec();
+    fn asarray(data: ArrayLike, shape: Option<Vec<usize>>) -> PyResult<Self> {
+        let data_vec = data.into_vec().unwrap();
         let shape = if let Some(s) = shape {
             let expected_size: usize = s.iter().product();
             if data_vec.len() != expected_size {
@@ -60,17 +60,17 @@ impl PyArray {
 
     #[staticmethod]
     #[pyo3(signature = (v, k=None))]
-    fn diag(v: VecOrArray, k: Option<isize>) -> Self {
-        let v_arr = v.into_ndarray();
+    fn diag(v: ArrayLike, k: Option<isize>) -> Self {
+        let v_arr = v.into_ndarray().unwrap();
         PyArray {
             inner: NdArray::from_diag(&v_arr, k.unwrap_or(0)),
         }
     }
 
     #[staticmethod]
-    fn outer(a: VecOrArray, b: VecOrArray) -> Self {
-        let a_arr = a.into_ndarray();
-        let b_arr = b.into_ndarray();
+    fn outer(a: ArrayLike, b: ArrayLike) -> Self {
+        let a_arr = a.into_ndarray().unwrap();
+        let b_arr = b.into_ndarray().unwrap();
         PyArray {
             inner: NdArray::outer(&a_arr, &b_arr),
         }
@@ -208,12 +208,17 @@ impl PyArray {
         self.inner.median()
     }
 
-    fn quantile(&self, py: Python<'_>, q: ArrayOrScalar) -> PyResult<Py<PyAny>> {
+    fn quantile(&self, py: Python<'_>, q: ArrayLike) -> PyResult<Py<PyAny>> {
         match q {
-            ArrayOrScalar::Scalar(q) => Ok(self.inner.quantile(q).into_pyobject(py)?.into_any().unbind()),
-            ArrayOrScalar::Array(arr) => Ok(PyArray {
-                inner: self.inner.quantiles(arr.inner.as_slice()),
-            }.into_pyobject(py)?.into_any().unbind()),
+            ArrayLike::Scalar(q_val) => {
+                Ok(self.inner.quantile(q_val).into_pyobject(py)?.into_any().unbind())
+            }
+            _ => {
+                let q_arr = q.into_ndarray()?;
+                Ok(PyArray {
+                    inner: self.inner.quantiles(q_arr.as_slice()),
+                }.into_pyobject(py)?.into_any().unbind())
+            }
         }
     }
 
@@ -225,10 +230,13 @@ impl PyArray {
         self.inner.all()
     }
 
-    fn __add__(&self, other: ArrayOrScalar) -> Self {
+    fn __add__(&self, other: ArrayLike) -> Self {
         match other {
-            ArrayOrScalar::Array(arr) => PyArray { inner: &self.inner + &arr.inner },
-            ArrayOrScalar::Scalar(s) => PyArray { inner: &self.inner + s },
+            ArrayLike::Scalar(s) => PyArray { inner: &self.inner + s },
+            _ => {
+                let arr = other.into_ndarray().unwrap();
+                PyArray { inner: &self.inner + &arr }
+            }
         }
     }
 
@@ -236,10 +244,13 @@ impl PyArray {
         PyArray { inner: other + &self.inner }
     }
 
-    fn __sub__(&self, other: ArrayOrScalar) -> Self {
+    fn __sub__(&self, other: ArrayLike) -> Self {
         match other {
-            ArrayOrScalar::Array(arr) => PyArray { inner: &self.inner - &arr.inner },
-            ArrayOrScalar::Scalar(s) => PyArray { inner: &self.inner - s },
+            ArrayLike::Scalar(s) => PyArray { inner: &self.inner - s },
+            _ => {
+                let arr = other.into_ndarray().unwrap();
+                PyArray { inner: &self.inner - &arr }
+            }
         }
     }
 
@@ -247,10 +258,13 @@ impl PyArray {
         PyArray { inner: other - &self.inner }
     }
 
-    fn __mul__(&self, other: ArrayOrScalar) -> Self {
+    fn __mul__(&self, other: ArrayLike) -> Self {
         match other {
-            ArrayOrScalar::Array(arr) => PyArray { inner: &self.inner * &arr.inner },
-            ArrayOrScalar::Scalar(s) => PyArray { inner: &self.inner * s },
+            ArrayLike::Scalar(s) => PyArray { inner: &self.inner * s },
+            _ => {
+                let arr = other.into_ndarray().unwrap();
+                PyArray { inner: &self.inner * &arr }
+            }
         }
     }
 
@@ -258,10 +272,13 @@ impl PyArray {
         PyArray { inner: other * &self.inner }
     }
 
-    fn __truediv__(&self, other: ArrayOrScalar) -> Self {
+    fn __truediv__(&self, other: ArrayLike) -> Self {
         match other {
-            ArrayOrScalar::Array(arr) => PyArray { inner: &self.inner / &arr.inner },
-            ArrayOrScalar::Scalar(s) => PyArray { inner: &self.inner / s },
+            ArrayLike::Scalar(s) => PyArray { inner: &self.inner / s },
+            _ => {
+                let arr = other.into_ndarray().unwrap();
+                PyArray { inner: &self.inner / &arr }
+            }
         }
     }
 
@@ -542,7 +559,7 @@ pub fn eye(n: usize, m: Option<usize>, k: Option<isize>) -> PyArray {
 
 #[pyfunction]
 #[pyo3(signature = (v, k=None))]
-pub fn diag(v: VecOrArray, k: Option<isize>) -> PyArray {
+pub fn diag(v: ArrayLike, k: Option<isize>) -> PyArray {
     PyArray::diag(v, k)
 }
 
@@ -570,6 +587,6 @@ pub fn full(shape: Vec<usize>, fill_value: f64) -> PyArray {
 
 #[pyfunction]
 #[pyo3(signature = (data, shape=None))]
-pub fn asarray(data: VecOrArray, shape: Option<Vec<usize>>) -> PyResult<PyArray> {
+pub fn asarray(data: ArrayLike, shape: Option<Vec<usize>>) -> PyResult<PyArray> {
     PyArray::asarray(data, shape)
 }

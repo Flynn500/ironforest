@@ -81,7 +81,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                 Ok(indices)
             }
 
-            fn query_knn(&self, query: &Bound<'_, PyAny>, k: usize) -> PyResult<Vec<usize>> {
+            fn query_knn(&self, query: &Bound<'_, PyAny>, k: usize) -> PyResult<Vec<(usize, f64)>> {
                 let query_vec = if let Ok(scalar) = query.extract::<f64>() {
                     vec![scalar]
                 } else if let Ok(vec_data) = query.extract::<Vec<f64>>() {
@@ -92,9 +92,9 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                     return Err(PyValueError::new_err("query must be a scalar, list, or Array"));
                 };
 
-                let indices = self.inner.query_knn(&query_vec, k);
+                let results = self.inner.query_knn(&query_vec, k);
 
-                Ok(indices)
+                Ok(results)
             }
 
             #[pyo3(signature = (queries=None, bandwidth=1.0, kernel="gaussian"))]
@@ -305,7 +305,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                 Ok(indices)
             }
 
-            fn query_knn(&self, query: &Bound<'_, PyAny>, k: usize) -> PyResult<Vec<usize>> {
+            fn query_knn(&self, query: &Bound<'_, PyAny>, k: usize) -> PyResult<Vec<(usize, f64)>> {
                 let query_vec = if let Ok(scalar) = query.extract::<f64>() {
                     vec![scalar]
                 } else if let Ok(vec_data) = query.extract::<Vec<f64>>() {
@@ -316,9 +316,9 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                     return Err(PyValueError::new_err("query must be a scalar, list, or Array"));
                 };
 
-                let indices = self.inner.query_knn(&query_vec, k);
+                let results = self.inner.query_knn(&query_vec, k);
 
-                Ok(indices)
+                Ok(results)
             }
 
             #[pyo3(signature = (queries=None, bandwidth=1.0, kernel="gaussian"))]
@@ -531,7 +531,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                 Ok(indices)
             }
 
-            fn query_knn(&self, query: &Bound<'_, PyAny>, k: usize) -> PyResult<Vec<usize>> {
+            fn query_knn(&self, query: &Bound<'_, PyAny>, k: usize) -> PyResult<Vec<(usize, f64)>> {
                 let query_vec = if let Ok(scalar) = query.extract::<f64>() {
                     vec![scalar]
                 } else if let Ok(vec_data) = query.extract::<Vec<f64>>() {
@@ -542,9 +542,9 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                     return Err(PyValueError::new_err("query must be a scalar, list, or Array"));
                 };
 
-                let indices = self.inner.query_knn(&query_vec, k);
+                let results = self.inner.query_knn(&query_vec, k);
 
-                Ok(indices)
+                Ok(results)
             }
 
             #[pyo3(signature = (queries=None, bandwidth=1.0, kernel="gaussian"))]

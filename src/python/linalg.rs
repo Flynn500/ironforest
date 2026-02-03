@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
 use crate::array::NdArray;
-use super::{PyArray, VecOrArray};
+use super::{PyArray, ArrayLike};
 
 pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(matmul, m)?)?;
@@ -82,9 +82,9 @@ fn diagonal(a: &PyArray, k: Option<isize>) -> PyResult<PyArray> {
 }
 
 #[pyfunction]
-fn outer(a: VecOrArray, b: VecOrArray) -> PyArray {
-    let a_arr = a.into_ndarray();
-    let b_arr = b.into_ndarray();
+fn outer(a: ArrayLike, b: ArrayLike) -> PyArray {
+    let a_arr = a.into_ndarray().unwrap();
+    let b_arr = b.into_ndarray().unwrap();
     PyArray {
         inner: NdArray::outer(&a_arr, &b_arr),
     }

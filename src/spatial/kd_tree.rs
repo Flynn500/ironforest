@@ -238,14 +238,14 @@ impl KDTree {
         }
     }
 
-    pub fn query_knn(&self, query: &[f64], k: usize) -> Vec<usize> {
+    pub fn query_knn(&self, query: &[f64], k: usize) -> Vec<(usize, f64)> {
         if k == 0 || self.n_points == 0 {
             return Vec::new();
         }
-        
+
         let mut heap = BinaryHeap::with_capacity(k);
         self.query_knn_recursive(0, query, &mut heap, k);
-        heap.into_sorted_vec().into_iter().map(|item| item.index).collect()
+        heap.into_sorted_vec().into_iter().map(|item| (item.index, item.distance)).collect()
     }
 
     fn query_knn_recursive(&self, node_idx: usize, query: &[f64], heap: &mut BinaryHeap<HeapItem>, k: usize,) {
