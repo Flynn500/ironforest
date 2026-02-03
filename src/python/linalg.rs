@@ -20,64 +20,65 @@ pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 #[pyfunction]
-fn matmul(a: &PyArray, b: &PyArray) -> PyArray {
-    PyArray { inner: a.inner.matmul(&b.inner) }
+fn matmul(a: ArrayLike, b: ArrayLike) -> PyArray {
+    PyArray { inner: a.into_ndarray().unwrap().matmul(&b.into_ndarray().unwrap()) }
 }
 
 #[pyfunction]
-fn dot(a: &PyArray, b: &PyArray) -> PyArray {
-    PyArray { inner: a.inner.dot(&b.inner) }
+fn dot(a: ArrayLike, b: ArrayLike) -> PyArray {
+    PyArray { inner: a.into_ndarray().unwrap().dot(&b.into_ndarray().unwrap()) }
 }
 
 #[pyfunction]
-fn transpose(a: &PyArray) -> PyArray {
-    PyArray { inner: a.inner.transpose() }
+fn transpose(a: ArrayLike) -> PyArray {
+    PyArray { inner: a.into_ndarray().unwrap().transpose() }
 }
 
 #[pyfunction]
-fn cholesky(a: &PyArray) -> PyResult<PyArray> {
-    a.inner.cholesky()
+fn cholesky(a: ArrayLike) -> PyResult<PyArray> {
+    a.into_ndarray().unwrap().cholesky()
         .map(|l| PyArray { inner: l })
         .map_err(|e| PyValueError::new_err(e))
 }
 
 #[pyfunction]
-fn qr(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
-    a.inner.qr()
+fn qr(a: ArrayLike) -> PyResult<(PyArray, PyArray)> {
+    a.into_ndarray().unwrap().qr()
         .map(|(q, r)| (PyArray { inner: q }, PyArray { inner: r }))
         .map_err(|e| PyValueError::new_err(e))
 }
 
 #[pyfunction]
-fn eig(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
-    a.inner.eig()
+fn eig(a: ArrayLike) -> PyResult<(PyArray, PyArray)> {
+    a.into_ndarray().unwrap().eig()
         .map(|(vals, vecs)| (PyArray { inner: vals }, PyArray { inner: vecs }))
         .map_err(|e| PyValueError::new_err(e))
 }
 
 #[pyfunction]
 #[pyo3(signature = (a, max_iter=1000, tol=1e-10))]
-fn eig_with_params(a: &PyArray, max_iter: usize, tol: f64) -> PyResult<(PyArray, PyArray)> {
-    a.inner.eig_with_params(max_iter, tol)
+fn eig_with_params(a: ArrayLike, max_iter: usize, tol: f64) -> PyResult<(PyArray, PyArray)> {
+    a.into_ndarray().unwrap().eig_with_params(max_iter, tol)
         .map(|(vals, vecs)| (PyArray { inner: vals }, PyArray { inner: vecs }))
         .map_err(|e| PyValueError::new_err(e))
 }
 
 #[pyfunction]
-fn eigvals(a: &PyArray) -> PyResult<PyArray> {
-    a.inner.eigvals()
+fn eigvals(a: ArrayLike) -> PyResult<PyArray> {
+    a.into_ndarray().unwrap().eigvals()
         .map(|vals| PyArray { inner: vals })
         .map_err(|e| PyValueError::new_err(e))
 }
 
 #[pyfunction]
 #[pyo3(signature = (a, k=None))]
-fn diagonal(a: &PyArray, k: Option<isize>) -> PyResult<PyArray> {
-    if a.inner.ndim() != 2 {
+fn diagonal(a: ArrayLike, k: Option<isize>) -> PyResult<PyArray> {
+    let arr = a.into_ndarray().unwrap();
+    if arr.ndim() != 2 {
         return Err(PyValueError::new_err("diagonal requires a 2D array"));
     }
     Ok(PyArray {
-        inner: a.inner.diagonal(k.unwrap_or(0)),
+        inner: arr.diagonal(k.unwrap_or(0)),
     })
 }
 
@@ -91,25 +92,30 @@ fn outer(a: ArrayLike, b: ArrayLike) -> PyArray {
 }
 
 #[pyfunction]
-fn lstsq(a: &PyArray, b: &PyArray) -> PyResult<(PyArray, PyArray)> {
-    let x = a.inner.least_squares(&b.inner)
+fn lstsq(a: ArrayLike, b: ArrayLike) -> PyResult<(PyArray, PyArray)> {
+    let aarr = a.into_ndarray().unwrap();
+    let barr = b.into_ndarray().unwrap();
+    let x = aarr.least_squares(&barr)
         .map_err(|e| PyValueError::new_err(e))?;
 
-    let ax = a.inner.matmul(&x);
-    let residuals = &b.inner - &ax;
+    let ax = aarr.matmul(&x);
+    let residuals = &barr - &ax;
 
     Ok((PyArray { inner: x }, PyArray { inner: residuals }))
 }
 
 #[pyfunction]
-fn weighted_lstsq(a: &PyArray, b: &PyArray, weights: &PyArray) -> PyResult<(PyArray, PyArray)> {
-    let x = a.inner.weighted_least_squares(&b.inner, &weights.inner)
+fn weighted_lstsq(a: ArrayLike, b: ArrayLike, weights: ArrayLike) -> PyResult<(PyArray, PyArray)> {
+    let aarr = a.into_ndarray().unwrap();
+    let barr = b.into_ndarray().unwrap();
+    let warr = weights.into_ndarray().unwrap();
+    let x = aarr.weighted_least_squares(&barr, &warr)
         .map_err(|e| PyValueError::new_err(e))?;
 
-    let ax = a.inner.matmul(&x);
-    let diff = &b.inner - &ax;
+    let ax = aarr.matmul(&x);
+    let diff = &barr - &ax;
 
-    let sqrt_w: Vec<f64> = weights.inner.as_slice()
+    let sqrt_w: Vec<f64> = warr.as_slice()
         .iter()
         .map(|&w| w.sqrt())
         .collect();

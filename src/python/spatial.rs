@@ -3,7 +3,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::types::PyAny;
 use crate::array::{NdArray, Shape};
 use crate::spatial::{BallTree, KDTree, VPTree, VantagePointSelection, DistanceMetric, KernelType, ApproxCriterion};
-use super::PyArray;
+use super::{PyArray, ArrayLike};
 
 pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBallTree>()?;
@@ -65,102 +65,38 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                 Ok(PyBallTree { inner: tree })
             }
 
-            fn query_radius(&self, query: &Bound<'_, PyAny>, radius: f64) -> PyResult<Vec<usize>> {
-                let query_vec = if let Ok(scalar) = query.extract::<f64>() {
-                    vec![scalar]
-                } else if let Ok(vec_data) = query.extract::<Vec<f64>>() {
-                    vec_data
-                } else if let Ok(arr) = query.extract::<PyArray>() {
-                    arr.inner.as_slice().to_vec()
-                } else {
-                    return Err(PyValueError::new_err("query must be a scalar, list, or Array"));
-                };
-
-                let indices = self.inner.query_radius(&query_vec, radius);
-
-                Ok(indices)
+            fn query_radius(&self, query: ArrayLike, radius: f64) -> PyResult<Vec<usize>> {
+                let query_vec = query.into_vec_with_dim(self.inner.dim)?;
+                Ok(self.inner.query_radius(&query_vec, radius))
             }
 
-            fn query_knn(&self, query: &Bound<'_, PyAny>, k: usize) -> PyResult<Vec<(usize, f64)>> {
-                let query_vec = if let Ok(scalar) = query.extract::<f64>() {
-                    vec![scalar]
-                } else if let Ok(vec_data) = query.extract::<Vec<f64>>() {
-                    vec_data
-                } else if let Ok(arr) = query.extract::<PyArray>() {
-                    arr.inner.as_slice().to_vec()
-                } else {
-                    return Err(PyValueError::new_err("query must be a scalar, list, or Array"));
-                };
-
-                let results = self.inner.query_knn(&query_vec, k);
-
-                Ok(results)
+            fn query_knn(&self, query: ArrayLike, k: usize) -> PyResult<Vec<(usize, f64)>> {
+                let query_vec = query.into_vec_with_dim(self.inner.dim)?;
+                Ok(self.inner.query_knn(&query_vec, k))
             }
 
             #[pyo3(signature = (queries=None, bandwidth=1.0, kernel="gaussian"))]
             fn kernel_density(
                 &self,
                 py: Python<'_>,
-                queries: Option<&Bound<'_, PyAny>>,
+                queries: Option<ArrayLike>,
                 bandwidth: Option<f64>,
                 kernel: Option<&str>,
             ) -> PyResult<Py<PyAny>> {
                 let bandwidth = bandwidth.unwrap_or(1.0);
                 let kernel_type = parse_kernel(kernel.unwrap_or("gaussian"))?;
-
+                
                 let queries_arr = if let Some(q) = queries {
-                    if let Ok(scalar) = q.extract::<f64>() {
-                        NdArray::from_vec(Shape::new(vec![1, 1]), vec![scalar])
-                    } else if let Ok(arr) = q.extract::<PyArray>() {
-                        let shape = arr.inner.shape().dims();
-                        if shape.len() == 1 {
-                            if shape[0] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[0], self.inner.dim
-                                )));
-                            }
-                            NdArray::from_vec(
-                                Shape::new(vec![1, shape[0]]),
-                                arr.inner.as_slice().to_vec()
-                            )
-                        } else if shape.len() == 2 {
-                            if shape[1] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[1], self.inner.dim
-                                )));
-                            }
-                            arr.inner.clone()
-                        } else {
-                            return Err(PyValueError::new_err(
-                                "queries must be 1D or 2D array"
-                            ));
-                        }
-                    } else if let Ok(vec_data) = q.extract::<Vec<f64>>() {
-                        let n = vec_data.len();
-                        if n == self.inner.dim {
-                            NdArray::from_vec(Shape::new(vec![1, n]), vec_data)
-                        } else {
-                            return Err(PyValueError::new_err(format!(
-                                "Query vector length {} doesn't match tree dimension {}",
-                                n, self.inner.dim
-                            )));
-                        }
-                    } else {
-                        return Err(PyValueError::new_err(
-                            "queries must be a scalar, list, or Array"
-                        ));
-                    }
+                    q.into_spatial_query_ndarray(self.inner.dim)?
                 } else {
                     NdArray::from_vec(
                         Shape::new(vec![self.inner.n_points, self.inner.dim]),
                         self.inner.data.clone()
                     )
                 };
-
+                
                 let result = self.inner.kernel_density(&queries_arr, bandwidth, kernel_type);
-
+                
                 if result.shape().dims()[0] == 1 {
                     Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
                 } else {
@@ -172,7 +108,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
             fn kernel_density_approx(
                 &self,
                 py: Python<'_>,
-                queries: Option<&Bound<'_, PyAny>>,
+                queries: Option<ArrayLike>,
                 bandwidth: Option<f64>,
                 kernel: Option<&str>,
                 criterion: Option<&str>,
@@ -212,49 +148,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                 };
 
                 let queries_arr = if let Some(q) = queries {
-                    if let Ok(scalar) = q.extract::<f64>() {
-                        NdArray::from_vec(Shape::new(vec![1, 1]), vec![scalar])
-                    } else if let Ok(arr) = q.extract::<PyArray>() {
-                        let shape = arr.inner.shape().dims();
-                        if shape.len() == 1 {
-                            if shape[0] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[0], self.inner.dim
-                                )));
-                            }
-                            NdArray::from_vec(
-                                Shape::new(vec![1, shape[0]]),
-                                arr.inner.as_slice().to_vec()
-                            )
-                        } else if shape.len() == 2 {
-                            if shape[1] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[1], self.inner.dim
-                                )));
-                            }
-                            arr.inner.clone()
-                        } else {
-                            return Err(PyValueError::new_err(
-                                "queries must be 1D or 2D array"
-                            ));
-                        }
-                    } else if let Ok(vec_data) = q.extract::<Vec<f64>>() {
-                        let n = vec_data.len();
-                        if n == self.inner.dim {
-                            NdArray::from_vec(Shape::new(vec![1, n]), vec_data)
-                        } else {
-                            return Err(PyValueError::new_err(format!(
-                                "Query vector length {} doesn't match tree dimension {}",
-                                n, self.inner.dim
-                            )));
-                        }
-                    } else {
-                        return Err(PyValueError::new_err(
-                            "queries must be a scalar, list, or Array"
-                        ));
-                    }
+                q.into_spatial_query_ndarray(self.inner.dim)?
                 } else {
                     NdArray::from_vec(
                         Shape::new(vec![self.inner.n_points, self.inner.dim]),
@@ -289,102 +183,38 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                 Ok(PyKDTree { inner: tree })
             }
 
-            fn query_radius(&self, query: &Bound<'_, PyAny>, radius: f64) -> PyResult<Vec<usize>> {
-                let query_vec = if let Ok(scalar) = query.extract::<f64>() {
-                    vec![scalar]
-                } else if let Ok(vec_data) = query.extract::<Vec<f64>>() {
-                    vec_data
-                } else if let Ok(arr) = query.extract::<PyArray>() {
-                    arr.inner.as_slice().to_vec()
-                } else {
-                    return Err(PyValueError::new_err("query must be a scalar, list, or Array"));
-                };
-
-                let indices = self.inner.query_radius(&query_vec, radius);
-
-                Ok(indices)
+            fn query_radius(&self, query: ArrayLike, radius: f64) -> PyResult<Vec<usize>> {
+                let query_vec = query.into_vec_with_dim(self.inner.dim)?;
+                Ok(self.inner.query_radius(&query_vec, radius))
             }
 
-            fn query_knn(&self, query: &Bound<'_, PyAny>, k: usize) -> PyResult<Vec<(usize, f64)>> {
-                let query_vec = if let Ok(scalar) = query.extract::<f64>() {
-                    vec![scalar]
-                } else if let Ok(vec_data) = query.extract::<Vec<f64>>() {
-                    vec_data
-                } else if let Ok(arr) = query.extract::<PyArray>() {
-                    arr.inner.as_slice().to_vec()
-                } else {
-                    return Err(PyValueError::new_err("query must be a scalar, list, or Array"));
-                };
-
-                let results = self.inner.query_knn(&query_vec, k);
-
-                Ok(results)
+            fn query_knn(&self, query: ArrayLike, k: usize) -> PyResult<Vec<(usize, f64)>> {
+                let query_vec = query.into_vec_with_dim(self.inner.dim)?;
+                Ok(self.inner.query_knn(&query_vec, k))
             }
 
             #[pyo3(signature = (queries=None, bandwidth=1.0, kernel="gaussian"))]
             fn kernel_density(
                 &self,
                 py: Python<'_>,
-                queries: Option<&Bound<'_, PyAny>>,
+                queries: Option<ArrayLike>,
                 bandwidth: Option<f64>,
                 kernel: Option<&str>,
             ) -> PyResult<Py<PyAny>> {
                 let bandwidth = bandwidth.unwrap_or(1.0);
                 let kernel_type = parse_kernel(kernel.unwrap_or("gaussian"))?;
-
+                
                 let queries_arr = if let Some(q) = queries {
-                    if let Ok(scalar) = q.extract::<f64>() {
-                        NdArray::from_vec(Shape::new(vec![1, 1]), vec![scalar])
-                    } else if let Ok(arr) = q.extract::<PyArray>() {
-                        let shape = arr.inner.shape().dims();
-                        if shape.len() == 1 {
-                            if shape[0] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[0], self.inner.dim
-                                )));
-                            }
-                            NdArray::from_vec(
-                                Shape::new(vec![1, shape[0]]),
-                                arr.inner.as_slice().to_vec()
-                            )
-                        } else if shape.len() == 2 {
-                            if shape[1] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[1], self.inner.dim
-                                )));
-                            }
-                            arr.inner.clone()
-                        } else {
-                            return Err(PyValueError::new_err(
-                                "queries must be 1D or 2D array"
-                            ));
-                        }
-                    } else if let Ok(vec_data) = q.extract::<Vec<f64>>() {
-                        let n = vec_data.len();
-                        if n == self.inner.dim {
-                            NdArray::from_vec(Shape::new(vec![1, n]), vec_data)
-                        } else {
-                            return Err(PyValueError::new_err(format!(
-                                "Query vector length {} doesn't match tree dimension {}",
-                                n, self.inner.dim
-                            )));
-                        }
-                    } else {
-                        return Err(PyValueError::new_err(
-                            "queries must be a scalar, list, or Array"
-                        ));
-                    }
+                    q.into_spatial_query_ndarray(self.inner.dim)?
                 } else {
                     NdArray::from_vec(
                         Shape::new(vec![self.inner.n_points, self.inner.dim]),
                         self.inner.data.clone()
                     )
                 };
-
+                
                 let result = self.inner.kernel_density(&queries_arr, bandwidth, kernel_type);
-
+                
                 if result.shape().dims()[0] == 1 {
                     Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
                 } else {
@@ -396,7 +226,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
             fn kernel_density_approx(
                 &self,
                 py: Python<'_>,
-                queries: Option<&Bound<'_, PyAny>>,
+                queries: Option<ArrayLike>,
                 bandwidth: Option<f64>,
                 kernel: Option<&str>,
                 criterion: Option<&str>,
@@ -436,49 +266,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                 };
 
                 let queries_arr = if let Some(q) = queries {
-                    if let Ok(scalar) = q.extract::<f64>() {
-                        NdArray::from_vec(Shape::new(vec![1, 1]), vec![scalar])
-                    } else if let Ok(arr) = q.extract::<PyArray>() {
-                        let shape = arr.inner.shape().dims();
-                        if shape.len() == 1 {
-                            if shape[0] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[0], self.inner.dim
-                                )));
-                            }
-                            NdArray::from_vec(
-                                Shape::new(vec![1, shape[0]]),
-                                arr.inner.as_slice().to_vec()
-                            )
-                        } else if shape.len() == 2 {
-                            if shape[1] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[1], self.inner.dim
-                                )));
-                            }
-                            arr.inner.clone()
-                        } else {
-                            return Err(PyValueError::new_err(
-                                "queries must be 1D or 2D array"
-                            ));
-                        }
-                    } else if let Ok(vec_data) = q.extract::<Vec<f64>>() {
-                        let n = vec_data.len();
-                        if n == self.inner.dim {
-                            NdArray::from_vec(Shape::new(vec![1, n]), vec_data)
-                        } else {
-                            return Err(PyValueError::new_err(format!(
-                                "Query vector length {} doesn't match tree dimension {}",
-                                n, self.inner.dim
-                            )));
-                        }
-                    } else {
-                        return Err(PyValueError::new_err(
-                            "queries must be a scalar, list, or Array"
-                        ));
-                    }
+                q.into_spatial_query_ndarray(self.inner.dim)?
                 } else {
                     NdArray::from_vec(
                         Shape::new(vec![self.inner.n_points, self.inner.dim]),
@@ -515,102 +303,38 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                 Ok(PyVPTree { inner: tree })
             }
 
-            fn query_radius(&self, query: &Bound<'_, PyAny>, radius: f64) -> PyResult<Vec<usize>> {
-                let query_vec = if let Ok(scalar) = query.extract::<f64>() {
-                    vec![scalar]
-                } else if let Ok(vec_data) = query.extract::<Vec<f64>>() {
-                    vec_data
-                } else if let Ok(arr) = query.extract::<PyArray>() {
-                    arr.inner.as_slice().to_vec()
-                } else {
-                    return Err(PyValueError::new_err("query must be a scalar, list, or Array"));
-                };
-
-                let indices = self.inner.query_radius(&query_vec, radius);
-
-                Ok(indices)
+            fn query_radius(&self, query: ArrayLike, radius: f64) -> PyResult<Vec<usize>> {
+                let query_vec = query.into_vec_with_dim(self.inner.dim)?;
+                Ok(self.inner.query_radius(&query_vec, radius))
             }
-
-            fn query_knn(&self, query: &Bound<'_, PyAny>, k: usize) -> PyResult<Vec<(usize, f64)>> {
-                let query_vec = if let Ok(scalar) = query.extract::<f64>() {
-                    vec![scalar]
-                } else if let Ok(vec_data) = query.extract::<Vec<f64>>() {
-                    vec_data
-                } else if let Ok(arr) = query.extract::<PyArray>() {
-                    arr.inner.as_slice().to_vec()
-                } else {
-                    return Err(PyValueError::new_err("query must be a scalar, list, or Array"));
-                };
-
-                let results = self.inner.query_knn(&query_vec, k);
-
-                Ok(results)
+ 
+            fn query_knn(&self, query: ArrayLike, k: usize) -> PyResult<Vec<(usize, f64)>> {
+                let query_vec = query.into_vec_with_dim(self.inner.dim)?;
+                Ok(self.inner.query_knn(&query_vec, k))
             }
 
             #[pyo3(signature = (queries=None, bandwidth=1.0, kernel="gaussian"))]
             fn kernel_density(
                 &self,
                 py: Python<'_>,
-                queries: Option<&Bound<'_, PyAny>>,
+                queries: Option<ArrayLike>,
                 bandwidth: Option<f64>,
                 kernel: Option<&str>,
             ) -> PyResult<Py<PyAny>> {
                 let bandwidth = bandwidth.unwrap_or(1.0);
                 let kernel_type = parse_kernel(kernel.unwrap_or("gaussian"))?;
-
+                
                 let queries_arr = if let Some(q) = queries {
-                    if let Ok(scalar) = q.extract::<f64>() {
-                        NdArray::from_vec(Shape::new(vec![1, 1]), vec![scalar])
-                    } else if let Ok(arr) = q.extract::<PyArray>() {
-                        let shape = arr.inner.shape().dims();
-                        if shape.len() == 1 {
-                            if shape[0] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[0], self.inner.dim
-                                )));
-                            }
-                            NdArray::from_vec(
-                                Shape::new(vec![1, shape[0]]),
-                                arr.inner.as_slice().to_vec()
-                            )
-                        } else if shape.len() == 2 {
-                            if shape[1] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[1], self.inner.dim
-                                )));
-                            }
-                            arr.inner.clone()
-                        } else {
-                            return Err(PyValueError::new_err(
-                                "queries must be 1D or 2D array"
-                            ));
-                        }
-                    } else if let Ok(vec_data) = q.extract::<Vec<f64>>() {
-                        let n = vec_data.len();
-                        if n == self.inner.dim {
-                            NdArray::from_vec(Shape::new(vec![1, n]), vec_data)
-                        } else {
-                            return Err(PyValueError::new_err(format!(
-                                "Query vector length {} doesn't match tree dimension {}",
-                                n, self.inner.dim
-                            )));
-                        }
-                    } else {
-                        return Err(PyValueError::new_err(
-                            "queries must be a scalar, list, or Array"
-                        ));
-                    }
+                    q.into_spatial_query_ndarray(self.inner.dim)?
                 } else {
                     NdArray::from_vec(
                         Shape::new(vec![self.inner.n_points, self.inner.dim]),
                         self.inner.data.clone()
                     )
                 };
-
+                
                 let result = self.inner.kernel_density(&queries_arr, bandwidth, kernel_type);
-
+                
                 if result.shape().dims()[0] == 1 {
                     Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
                 } else {
@@ -622,7 +346,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
             fn kernel_density_approx(
                 &self,
                 py: Python<'_>,
-                queries: Option<&Bound<'_, PyAny>>,
+                queries: Option<ArrayLike>,
                 bandwidth: Option<f64>,
                 kernel: Option<&str>,
                 criterion: Option<&str>,
@@ -662,49 +386,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                 };
 
                 let queries_arr = if let Some(q) = queries {
-                    if let Ok(scalar) = q.extract::<f64>() {
-                        NdArray::from_vec(Shape::new(vec![1, 1]), vec![scalar])
-                    } else if let Ok(arr) = q.extract::<PyArray>() {
-                        let shape = arr.inner.shape().dims();
-                        if shape.len() == 1 {
-                            if shape[0] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[0], self.inner.dim
-                                )));
-                            }
-                            NdArray::from_vec(
-                                Shape::new(vec![1, shape[0]]),
-                                arr.inner.as_slice().to_vec()
-                            )
-                        } else if shape.len() == 2 {
-                            if shape[1] != self.inner.dim {
-                                return Err(PyValueError::new_err(format!(
-                                    "Query dimension {} doesn't match tree dimension {}",
-                                    shape[1], self.inner.dim
-                                )));
-                            }
-                            arr.inner.clone()
-                        } else {
-                            return Err(PyValueError::new_err(
-                                "queries must be 1D or 2D array"
-                            ));
-                        }
-                    } else if let Ok(vec_data) = q.extract::<Vec<f64>>() {
-                        let n = vec_data.len();
-                        if n == self.inner.dim {
-                            NdArray::from_vec(Shape::new(vec![1, n]), vec_data)
-                        } else {
-                            return Err(PyValueError::new_err(format!(
-                                "Query vector length {} doesn't match tree dimension {}",
-                                n, self.inner.dim
-                            )));
-                        }
-                    } else {
-                        return Err(PyValueError::new_err(
-                            "queries must be a scalar, list, or Array"
-                        ));
-                    }
+                q.into_spatial_query_ndarray(self.inner.dim)?
                 } else {
                     NdArray::from_vec(
                         Shape::new(vec![self.inner.n_points, self.inner.dim]),

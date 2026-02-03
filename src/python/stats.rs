@@ -17,29 +17,29 @@ pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 #[pyfunction]
-fn sum(a: &PyArray) -> f64 {
-    a.inner.sum()
+fn sum(a: ArrayLike) -> f64 {
+    a.into_ndarray().unwrap().sum()
 }
 
 #[pyfunction]
-fn mean(a: &PyArray) -> f64 {
-    a.inner.mean()
+fn mean(a: ArrayLike) -> f64 {
+    a.into_ndarray().unwrap().mean()
 }
 
 #[pyfunction]
-fn var(a: &PyArray) -> f64 {
-    a.inner.var()
+fn var(a: ArrayLike) -> f64 {
+    a.into_ndarray().unwrap().var()
 }
 
 #[pyfunction]
 #[pyo3(name = "std")]
-fn std_dev(a: &PyArray) -> f64 {
-    a.inner.std()
+fn std_dev(a: ArrayLike) -> f64 {
+    a.into_ndarray().unwrap().std()
 }
 
 #[pyfunction]
-fn median(a: &PyArray) -> f64 {
-    a.inner.median()
+fn median(a: ArrayLike) -> f64 {
+    a.into_ndarray().unwrap().median()
 }
 
 #[pyfunction]
@@ -58,21 +58,21 @@ fn quantile(py: Python<'_>, a: &PyArray, q: ArrayLike) -> PyResult<Py<PyAny>> {
 }
 
 #[pyfunction]
-fn any(a: &PyArray) -> bool {
-    a.inner.any()
+fn any(a: ArrayLike) -> bool {
+    a.into_ndarray().unwrap().any()
 }
 
 #[pyfunction]
-fn all(a: &PyArray) -> bool {
-    a.inner.all()
+fn all(a: ArrayLike) -> bool {
+    a.into_ndarray().unwrap().all()
 }
 
 #[pyfunction]
-fn pearson(a: &PyArray, b: &PyArray) -> f64 {
-    a.inner.pearson(&b.inner)
+fn pearson(a: ArrayLike, b: ArrayLike) -> f64 {
+    a.into_ndarray().unwrap().pearson(&b.into_ndarray().unwrap())
 }
 
 #[pyfunction]
-fn spearman(a: &PyArray, b: &PyArray) -> f64 {
-    a.inner.spearman(&b.inner)
+fn spearman(a: ArrayLike, b: ArrayLike) -> f64 {
+    a.into_ndarray().unwrap().spearman(&b.into_ndarray().unwrap())
 }
