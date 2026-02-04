@@ -11,6 +11,6 @@ readme = "README.md"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
-include = ["ironforest.pyi"]
+include = ["ironforest.pyi", "python/ironforest/py.typed"]
 module-name = "ironforest._core"
 python-source = "python"
