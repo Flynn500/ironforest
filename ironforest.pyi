@@ -488,10 +488,28 @@ class Array(Sequence[float]):
         """Get element (1D) or row (2D+) at index."""
         ...
     @overload
-    def __getitem__(self, index: slice) -> Array: ...
+    def __getitem__(self, index: slice) -> Array:
+        """Slice always returns an array."""
+        ...
+    @overload
+    def __getitem__(self, index: Tuple[int, int]) -> float:
+        """Two integer indices return a scalar."""
+        ...
+    @overload
+    def __getitem__(self, index: Tuple[int, slice]) -> Array:
+        """Integer and slice return an array."""
+        ...
+    @overload
+    def __getitem__(self, index: Tuple[slice, int]) -> Array:
+        """Slice and integer return an array."""
+        ...
+    @overload
+    def __getitem__(self, index: Tuple[slice, slice]) -> Array:
+        """Two slices return an array."""
+        ...
     @overload
     def __getitem__(self, index: Tuple[int, ...]) -> float | Array:
-        """Get element at (i, j, ...) or sub-array if fewer indices than dimensions."""
+        """Fallback: multiple indices can return scalar or array."""
         ...
     @overload
     def __setitem__(self, index: int, value: float) -> None:

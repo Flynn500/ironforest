@@ -432,19 +432,49 @@ impl PyArray {
         }
 
         if let Ok(slice) = key.cast::<PySlice>() {
-            let len = self.inner.as_slice().len() as isize;
-            let indices = slice.indices(len)?;
+            let axis0_len = dims[0] as isize;
+            let indices = slice.indices(axis0_len)?;
+
+            if ndim == 1 {
+                let mut result = Vec::new();
+                let mut i = indices.start;
+                let data = self.inner.as_slice();
+                while (indices.step > 0 && i < indices.stop) || (indices.step < 0 && i > indices.stop) {
+                    if i >= 0 && i < axis0_len {
+                        result.push(data[i as usize]);
+                    }
+                    i += indices.step;
+                }
+                return Ok(PyArray {
+                    inner: NdArray::from_vec(Shape::d1(result.len()), result),
+                }.into_pyobject(py)?.into_any().unbind());
+            }
+
+            let row_size: usize = dims[1..].iter().product();
             let mut result = Vec::new();
             let mut i = indices.start;
             let data = self.inner.as_slice();
+            let stride = self.inner.strides()[0];
+
             while (indices.step > 0 && i < indices.stop) || (indices.step < 0 && i > indices.stop) {
-                if i >= 0 && i < len {
-                    result.push(data[i as usize]);
+                if i >= 0 && i < axis0_len {
+                    let row_start = (i as usize) * stride;
+                    result.extend_from_slice(&data[row_start..row_start + row_size]);
                 }
                 i += indices.step;
             }
+
+            let num_rows = if indices.step > 0 {
+                ((indices.stop - indices.start + indices.step - 1) / indices.step).max(0) as usize
+            } else {
+                ((indices.start - indices.stop - indices.step - 1) / (-indices.step)).max(0) as usize
+            };
+
+            let mut result_dims = vec![num_rows];
+            result_dims.extend_from_slice(&dims[1..]);
+
             return Ok(PyArray {
-                inner: NdArray::from_vec(Shape::d1(result.len()), result),
+                inner: NdArray::from_vec(Shape::new(result_dims), result),
             }.into_pyobject(py)?.into_any().unbind());
         }
 

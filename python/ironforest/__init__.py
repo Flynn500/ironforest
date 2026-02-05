@@ -15,7 +15,6 @@ from ironforest._core import (
     spatial,
 )
 
-# Import pure Python modules
 from . import models
 
 __all__ = [

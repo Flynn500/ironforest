@@ -33,9 +33,10 @@ class LinearRegression:
             X_design = X
 
         params, _ = linalg.lstsq(X_design, y)
-        
+
         if self.fit_intercept:
-            self.intercept_ = params[0]
+            intercept_val = params[0]
+            self.intercept_ = float(intercept_val) if isinstance(intercept_val, (int, float)) else intercept_val.item()
             self.coef_ = params[1:]
         else:
             self.intercept_ = 0.0
@@ -63,7 +64,7 @@ class LinearRegression:
         y_pred = X @ self.coef_ # type: ignore
         
         if self.fit_intercept:
-            y_pred = y_pred + self.intercept_ # type: ignore
+            y_pred = y_pred + self.intercept_ 
         
         return y_pred
     
