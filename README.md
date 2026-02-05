@@ -1,7 +1,7 @@
 # IronForest
 IronForest is a rust-powered python library supporting spatial queries, array-based computation and tree-based machine learning. 
 
-I started this project to support my previous python library dubious, a project which had the personal constraint of no external dependecies other than numpy. IronForest started as a way for me to eliminate numpy as dubious's lone dependency but has since grown into a standalone project as I have pivoted towards spatial indexing trees and tree-based models. The core rational behind this project was to get a better grasp of how libraries I use on a regular basis work, and learn how to write python bindings to offload computationally expensive tasks to tools better suited. Like dubious, I focused on building things from the ground up. I didn't want to glue dependecies together to get something functional, I wanted to understand from input to output how these algorithms worked under the hood. I chose rust because I had read the book around a year prior to starting this project, and pyo3 bindings are relitively easy to get working. This library is only exposed through python as that's where I've actually needed its features and I don't intend to package this as a rust create at this stage.
+I started this project to support my previous python library dubious, a project which had the personal constraint of no external dependecies other than numpy. IronForest started as a way for me to eliminate numpy as dubious's lone dependency but has since grown into a standalone project as I have pivoted towards spatial indexing trees and tree-based models to support some of my other projects.
 
 ## Status
 This is largely a learning project and the API is subject to change. We achieve similar performance to numpy (beating them in a rare few) across most operations but basic broadcasting arithmetic is around 4x slower in most cases. I intend to add a few unsafe methods to speed things up where applicable but I don't intend to optimize much further at this stage. 
@@ -16,13 +16,18 @@ You can also build with `maturin build --release` assuming maturin is installed.
 ```python
 import ironforest as irn
 
-a = irn.Array([2, 2], [1.0, 2.0, 3.0, 4.0])
-b = irn.Array([2, 2], [5.0, 6.0, 7.0, 8.0])
+gen = irn.random.Generator.from_seed(0)
+points = gen.uniform(0.0, 100.0, [100, 2])
 
-print(f"a @ b = {(a @ b).tolist()}")
+tree = irn.spatial.VPTree.from_array(points, leaf_size=10)
+
+query_point = [50.0, 50.0]
+neighbors = tree.query_knn(query_point, k=5)
+
+print(neighbors)
 ```
 Output: 
-`a @ b = [[19.0, 22.0], [43.0, 50.0]]`
+`[(28, 7.435055148638418), (34, 7.549053283615578), (3, 8.55705353151589), (43, 8.961446938534534), (45, 9.772273124615534)]`
 
 ## Features
 - Array, an N-dimensional array object with broadcasting
@@ -36,6 +41,9 @@ Output:
 - Statistical methods (mean, median, var, std, quantile)
 - Pearson and Spearman correlation
 
+## Rationale
+The core rational behind this project was to get a better grasp of how libraries I use on a regular basis work, and learn how to write python bindings to offload computationally expensive tasks to tools better suited. Like dubious, I focused on building things from the ground up. I didn't want to glue dependecies together to get something functional, I wanted to understand from input to output how these algorithms worked under the hood. I chose rust because I had read the book around a year prior to starting this project, and pyo3 bindings are relitively easy to get working. This library is only exposed through python as that's where I've actually use its features. I don't intend to package this as a rust create at this stage.
+
 ### Top-level
 - `ironforest.Array`
 
@@ -48,33 +56,47 @@ Output:
 
 ## Examples
 ```python
-import ironforest as irn
+  import ironforest as irn
 
-a = irn.Array([2, 2], [1.0, 2.0, 3.0, 4.0])
-b = irn.Array([2, 2], [5.0, 6.0, 7.0, 8.0])
+  gen = irn.random.Generator.from_seed(123)
+  X = gen.uniform(0.0, 10.0, [50, 1])
+  noise = gen.normal(0.0, 1.0, [50, 1])
+  y = X * 2.0 + noise + 5.0
 
-print(f"a + b = {(a + b).tolist()}")
-print(f"a * b = {(a * b).tolist()}")
+  train_size = 40
+  X_train = X[0:train_size]
+  y_train = y[0:train_size]
+  X_test = X[train_size:50]
+  y_test = y[train_size:50]
+
+  model = irn.models.LinearRegression(fit_intercept=True)
+  model.fit(X_train, y_train)
+
+  print(f"Fitted coefficients: {model.coef_.}")
+  print(f"Fitted intercept: {model.intercept_:.2f}")
+
+  test_score = model.score(X_test, y_test)
+  print(f"\nTest R² score: {test_score:.3f}")
+
+  predictions = model.predict(X_test)
+  print(f"\nFirst 5 predictions vs actual:")
+  for i in range(5):
+      pred = predictions[i].item()
+      actual = y_test[i].item()
+      print(f"  Predicted: {pred:.2f}, Actual: {actual:.2f}")
 ```
-Output: 
-`
-a + b = [[6.0, 8.0], [10.0, 12.0]]
-a * b = [[5.0, 12.0], [21.0, 32.0]]
-`
-```python
-import ironforest as irn
+`Fitted coefficients: [[1.9324300205909533]]`  
+`Fitted intercept: 5.35`
 
-gen = irn.Generator.from_seed(123)
+`Test R² score: 0.985`
 
-uniform = gen.uniform(0.0, 1.0, [2, 3])
-print(f"Uniform [0, 1): {uniform.tolist()}")
+`First 5 predictions vs actual:`  
+`Predicted: 19.52, Actual: 19.53`  
 
-normal = gen.standard_normal([2, 3])
-print(f"Standard normal: {normal.tolist()}")
-```
-Output: 
-`Uniform [0, 1): [0.19669435215621578, 0.9695722925002218, 0.46744032361670884, 0.12698379756585432]
-Standard normal: [-0.0008585765206425146, 1.4733334715623352, -1.16180050645278, -0.772101732825336]`
+`Predicted: 5.45, Actual: 4.94`  
+`Predicted: 6.20, Actual: 5.26`  
+`Predicted: 7.42, Actual: 7.64`  
+`Predicted: 15.35, Actual: 14.53`  
 
 ## Modules
 
