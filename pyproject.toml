@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ironforest"
-version = "0.2"
+version = "0.2.1"
 requires-python = ">=3.8"
 description = "An library supporting numerical computation and spatial analysis."
 readme = "README.md"
