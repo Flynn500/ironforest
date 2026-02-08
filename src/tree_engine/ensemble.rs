@@ -2,8 +2,6 @@ use crate::tree_engine::builder::TreeBuilder;
 use crate::tree_engine::config::{TaskType, TreeConfig};
 use crate::tree_engine::scoring;
 use crate::tree_engine::tree::Tree;
-
-// NOTE: adjust this import path to match your project layout.
 use crate::random::generator::Generator;
 
 use rayon::prelude::*;

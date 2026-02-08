@@ -49,7 +49,7 @@ The core rational behind this project was to get a better grasp of how libraries
 - [ironforest.stats](#stats)
 - [ironforest.random](#random)
 - [ironforest.spatial](#spatial)
-- - [ironforest.model](#model)
+- [ironforest.model](#model)
 
 ## Examples
 ```python
@@ -104,9 +104,9 @@ The core rational behind this project was to get a better grasp of how libraries
 
 ### Model
 - Linear Regression
-- Local Regression
+- Local Regression (soon)
 - Decision Trees
-- Random Forest (soon)
+- Random Forest
 - Isolation Forest (soon)
 
 ### Random
