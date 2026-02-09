@@ -4,7 +4,11 @@ IronForest is a rust-powered python library supporting spatial queries, array-ba
 I started this project to support my previous python library dubious, a project which had the personal constraint of no external dependecies other than numpy. IronForest started as a way for me to eliminate numpy as dubious's lone dependency but has since grown into a standalone project as I have pivoted towards spatial indexing trees and tree-based models to support some of my other projects.
 
 ## Status
-This is largely a learning project and the API is subject to change. We achieve similar performance to numpy (beating them in a rare few) across most operations but basic broadcasting arithmetic is around 4x slower in most cases. I intend to add a few unsafe methods to speed things up where applicable but I don't intend to optimize much further at this stage. 
+This is largely a learning project and the API is subject to change. We achieve similar performance to numpy (beating them in a rare few) across most operations but basic broadcasting arithmetic is around 4x slower in most cases. 
+
+On the spatial indexing front we comeout ahead of Sci-Py and Scitkit-Learn but only because our pruning logic is cruder and far more aggressive. Our KDE approximation in particular is much faster but can easily lead to incorrect results with poor tuning. 
+
+Expect less new features going forwards. I intend to expand my tree engine to support a wider variety of decision-tree type ML algorithms, as well as adding a few additional spatial indexing trees but my core focus for the forseeable future is ironing out the kinks of what's already here and documenting what my data structures and models are capable of and where they fall short.
 
 ## Installation
 `pip install ironforest`
@@ -33,13 +37,15 @@ Output:
 - Array, an N-dimensional array object with broadcasting
 - matrix operations and constructors
 - KDTree, BallTree & VPTree with knn radius KDE and KDE approx queries
-- Linear and Local Regression
-- Decision trees, Random Forest and Isolation Forest
-- Random sampling from uniform, normal lognormal, gamma and beta distributions.
+- Decision trees, Random Forest and (Isolation Forest soon)
+- Linear and (Local Regression soon)
+- Random sampling from uniform, normal, lognormal, gamma and beta distributions.
 - Statistical methods (mean, median, var, std, quantile, Pearson and Spearman correlation)
 
 ## Rationale
-The core rational behind this project was to get a better grasp of how libraries I use on a regular basis work, and learn how to write python bindings to offload computationally expensive tasks to tools better suited. Like dubious, I focused on building things from the ground up. I didn't want to glue dependecies together to get something functional, I wanted to understand from input to output how these algorithms worked under the hood. I chose rust because I had read the book around a year prior to starting this project, and pyo3 bindings are relitively easy to get working. This library is only exposed through python as that's where I've actually use its features. I don't intend to package this as a rust create at this stage.
+The core rational behind this project was to deepen my understanding of how libraries I use on a regular basis work, and learn how to write python bindings to offload computationally expensive tasks to tools better suited. Like dubious, I focused on building things from the ground up. I didn't want to glue dependecies together to get something functional, I wanted to understand from input to output how these algorithms worked under the hood. I chose rust because I had read the book around a year prior to starting this project, and pyo3 bindings are relitively easy to get working. This library is only exposed through python as that's where I've actually use its features. I don't intend to package this as a rust create at this stage. 
+
+Because of the nature of this project I don't intend to bring on any other contributors, I am however always open to suggestions and criticism. 
 
 ### Top-level
 - `ironforest.Array`
@@ -118,5 +124,5 @@ The core rational behind this project was to get a better grasp of how libraries
 - Least Squares & Weighted Least Squares solver.
 
 ### Stats
-- Basic statistical methods for `Array` objects, mean, var and quantile.
+- Basic statistical methods for `Array` objects, mean, var std, and quantile.
 - Pearson and Spearman correlation.
