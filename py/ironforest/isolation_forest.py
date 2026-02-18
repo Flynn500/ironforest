@@ -215,8 +215,7 @@ class IsolationForest:
         """
         if n <= 1:
             return 1.0
-        harmonic = 0.5772156649 + 0.0  #Euler's constant
-        if n > 2:
-            for i in range(1, n):
-                harmonic += 1.0 / i
+        if n == 2:
+            return 1.0
+        harmonic = sum(1.0 / i for i in range(1, n))
         return 2.0 * harmonic - 2.0 * (n - 1) / n

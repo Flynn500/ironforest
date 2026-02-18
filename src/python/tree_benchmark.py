@@ -149,7 +149,7 @@ if __name__ == "__main__":
     queries_irn = irn.Array.from_numpy(queries_np)
 
     t0 = time.perf_counter()
-    agg_result = irn.spatial.AggTree.from_array(points_irn, leaf_size=32, metric="euclidean", max_span= 0.3) \
+    agg_result = irn.spatial.AggTree.from_array(points_irn, leaf_size=32, metric="euclidean", max_span= 1.5) \
         .kernel_density(queries_irn, bandwidth=0.5, kernel="gaussian", normalize=True)
     t1 = time.perf_counter()
     agg_time = t1-t0
