@@ -2,13 +2,14 @@ use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
 use pyo3::types::PyAny;
 use crate::array::{NdArray, Shape};
-use crate::spatial::{BallTree, KDTree, VPTree, VantagePointSelection, DistanceMetric, KernelType, SpatialQuery};
+use crate::spatial::{BallTree, KDTree, VPTree, AggTree, VantagePointSelection, DistanceMetric, KernelType, SpatialQuery};
 use super::{PyArray, ArrayLike};
 
 pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBallTree>()?;
     m.add_class::<PyKDTree>()?;
     m.add_class::<PyVPTree>()?;
+    m.add_class::<PyAggTree>()?;
     Ok(())
 }
 
@@ -185,7 +186,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                 let query_vec = query.into_vec_with_dim(self.inner.dim)?;
                 Ok(self.inner.query_radius(&query_vec, radius))
             }
- 
+
             fn query_knn(&self, query: ArrayLike, k: usize) -> PyResult<Vec<(usize, f64)>> {
                 let query_vec = query.into_vec_with_dim(self.inner.dim)?;
                 Ok(self.inner.query_knn(&query_vec, k))
@@ -201,7 +202,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
             ) -> PyResult<Py<PyAny>> {
                 let bandwidth = bandwidth.unwrap_or(1.0);
                 let kernel_type = parse_kernel(kernel.unwrap_or("gaussian"))?;
-                
+
                 let queries_arr = if let Some(q) = queries {
                     q.into_spatial_query_ndarray(self.inner.dim)?
                 } else {
@@ -210,9 +211,64 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
                         self.inner.data.clone()
                     )
                 };
-                
+
                 let result = self.inner.kernel_density(&queries_arr, bandwidth, kernel_type);
-                
+
+                if result.shape().dims()[0] == 1 {
+                    Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
+                } else {
+                    Ok(PyArray { inner: result }.into_pyobject(py)?.into_any().unbind())
+                }
+            }
+        }
+
+        #[pyclass(name = "AggTree")]
+        pub struct PyAggTree {
+            inner: AggTree,
+        }
+
+        #[pymethods]
+        impl PyAggTree {
+            #[staticmethod]
+            #[pyo3(signature = (array, leaf_size=20, metric="euclidean", min_samples=10, max_span=0.1))]
+            fn from_array(
+                array: &PyArray,
+                leaf_size: Option<usize>,
+                metric: Option<&str>,
+                min_samples: Option<usize>,
+                max_span: Option<f64>
+            ) -> PyResult<Self> {
+                let leaf_size = leaf_size.unwrap_or(20);
+                let metric_str = metric.unwrap_or("euclidean");
+                let metric = parse_metric(metric_str)?;
+                let min_samples = min_samples.unwrap_or(10);
+                let max_span = max_span.unwrap_or(0.1);
+                let tree = AggTree::from_ndarray(&array.inner, leaf_size, metric, min_samples, max_span);
+                Ok(PyAggTree { inner: tree })
+            }
+
+            #[pyo3(signature = (queries=None, bandwidth=1.0, kernel="gaussian"))]
+            fn kernel_density(
+                &self,
+                py: Python<'_>,
+                queries: Option<ArrayLike>,
+                bandwidth: Option<f64>,
+                kernel: Option<&str>,
+            ) -> PyResult<Py<PyAny>> {
+                let bandwidth = bandwidth.unwrap_or(1.0);
+                let kernel_type = parse_kernel(kernel.unwrap_or("gaussian"))?;
+
+                let queries_arr = if let Some(q) = queries {
+                    q.into_spatial_query_ndarray(self.inner.dim)?
+                } else {
+                    NdArray::from_vec(
+                        Shape::new(vec![self.inner.n_points, self.inner.dim]),
+                        self.inner.data.clone()
+                    )
+                };
+
+                let result = self.inner.kernel_density(&queries_arr, bandwidth, kernel_type);
+
                 if result.shape().dims()[0] == 1 {
                     Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
                 } else {

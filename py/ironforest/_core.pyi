@@ -1325,3 +1325,121 @@ class spatial:
                 1D Array of density estimates at each training point.
             """
             ...
+
+    class AggTree:
+        """Aggregation tree for fast approximate kernel density estimation.
+
+        An aggregation tree is a spatial tree structure that enables fast approximate
+        kernel density estimation by aggregating groups of points into representative
+        clusters. Nodes containing at least min_samples points within a span of max_span
+        can be approximated as a single cluster during queries.
+        """
+
+        @staticmethod
+        def from_array(
+            array: Array,
+            leaf_size: int = 20,
+            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
+            min_samples: int = 10,
+            max_span: float = 0.1
+        ) -> "spatial.AggTree":
+            """Construct an aggregation tree from a 2D array of points.
+
+            Args:
+                array: 2D array of shape (n_points, n_features) containing the data points.
+                leaf_size: Maximum number of points in a leaf node. Smaller values lead to
+                    faster queries but slower construction and more memory usage.
+                    Defaults to 20.
+                metric: Distance metric to use for measuring distances between points.
+                    Options are:
+                    - "euclidean": Standard Euclidean (L2) distance (default)
+                    - "manhattan": Manhattan (L1) distance (taxicab distance)
+                    - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                min_samples: Minimum number of samples in a node for it to be eligible
+                    for aggregation. Nodes with at least this many points can be
+                    approximated during queries. Defaults to 10.
+                max_span: Maximum span (diameter) for a node to be aggregated. Nodes with
+                    span (2 * radius) <= max_span and at least min_samples points will be
+                    approximated during queries. Defaults to 0.1.
+
+            Returns:
+                A constructed AggTree instance.
+
+            Raises:
+                AssertionError: If array is not 2-dimensional.
+                ValueError: If metric is not one of the valid options.
+            """
+            ...
+
+        @overload
+        def kernel_density(
+            self,
+            queries: ArrayLike,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian"
+        ) -> float:
+            """Estimate kernel density at a single query point (with approximation).
+
+            Args:
+                queries: Single query point (scalar, list, or array-like).
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+
+            Returns:
+                Approximate density estimate at the query point (float).
+            """
+            ...
+
+        @overload
+        def kernel_density(
+            self,
+            queries: ArrayLike,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian"
+        ) -> List:
+            """Estimate kernel density at multiple query points (with approximation).
+
+            Args:
+                queries: 2D array-like of query points with shape (n_queries, n_features),
+                    or 1D array-like representing a single point.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+
+            Returns:
+                1D Array of approximate density estimates, one for each query point.
+            """
+            ...
+
+        @overload
+        def kernel_density(
+            self,
+            queries: None = None,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian"
+        ) -> List:
+            """Estimate kernel density at all training points (with approximation).
+
+            Args:
+                queries: If None, computes density at each training point.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Larger values
+                    produce smoother estimates. Defaults to 1.0.
+                kernel: Kernel function to use for density estimation. Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+
+            Returns:
+                1D Array of approximate density estimates at each training point.
+            """
+            ...
