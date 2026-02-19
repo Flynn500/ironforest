@@ -29,6 +29,8 @@ This benchmark was done on a mixture of uniform noise & scikit-learn's make blob
 
 These highlight the best scenarios to use our aggregate tree. If your dataset doesn't contain these high density regions that become that can be aggregated, KDE calculations devolve into standard ball tree methods. The error drops to 0, but you miss out on the memory compacting and speed increases our AggTree was designed for.
 
+I'd also like to note that the dense regions in the above examples were generated radially. I am considering adding alternative aggregation modes that target non-radial regions as well, but our current implementation will breakdown when applied to datasets with highly anisotropic clusters.
+
 ### Implementation
 
 Our AggTree works on the core principle of trying to reduce our dataset into a series of aggregate nodes. Instead of summing the kernel contributions of significant points we sum a mixture from a smaller set of aggregates alongside any raw data that wasn't aggregated.
