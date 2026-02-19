@@ -4,7 +4,7 @@ Our AggTree is a BallTree variant optimized for high query speeds & reduced memo
 
 You can tune how aggresively nodes are aggregated with the `atol` parameter. When using our AggTree it may be worth comparing how this parameter effects error for your usecase against our ball tree. Our error bounds calcuation can be overly conservitive and the true absolute error for a given usecase will often be lower than this absolute tolerance parameter.
 
-### Benchmarks
+### Benchmarks 
 
 The following heatmap was generated using a bandwidth of 0.05 and an atol of 0.001
 
@@ -12,6 +12,19 @@ The following heatmap was generated using a bandwidth of 0.05 and an atol of 0.0
 
 
 The above heatmap is a best-case scenario for our AggTree. The dataset was generated using scikit-learn's make blobs with a STD of 0.04, just below our bandwidth.
+
+<div align="center">
+
+  dim  |     bw |  agg_time  |  sk_time |  speedup |  max_err% | mean_err% |
+-------|--------|------------|----------|----------|-----------|-----------|
+    2  | 0.1468 |     0.062  |   3.665  | 59.36x   | 0.281%    |0.084%     |
+    4  | 0.2254 |     0.326  |   5.417  | 16.62x   | 0.292%    |0.156%     |
+    8  | 0.3550 |     0.394  |   6.773  | 17.19x   | 0.545%    |0.388%     |
+   16  | 0.5216 |     0.562  |  15.067  | 26.82x   | 0.596%    |0.484%     |
+
+</div>
+
+This benchmark was done on a mixture of uniform noise & scikit-learn's make blobs. 
 
 ### Implementation
 
