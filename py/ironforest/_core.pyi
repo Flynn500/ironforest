@@ -1348,9 +1348,9 @@ class spatial:
         """Aggregation tree for fast approximate kernel density estimation.
 
         An aggregation tree is a spatial tree structure that enables fast approximate
-        kernel density estimation by aggregating groups of points into representative
-        clusters. Nodes containing at least min_samples points within a span of max_span
-        can be approximated as a single cluster during queries.
+        kernel density estimation using a Taylor expansion to approximate contributions
+        from groups of points. The absolute tolerance (atol) controls how aggressively
+        nodes are approximated during queries.
         """
 
         @staticmethod
@@ -1358,8 +1358,9 @@ class spatial:
             array: Array,
             leaf_size: int = 20,
             metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
-            min_samples: int = 10,
-            max_span: float = 0.1
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            bandwidth: float = 1.0,
+            atol: float = 0.01,
         ) -> "spatial.AggTree":
             """Construct an aggregation tree from a 2D array of points.
 
@@ -1373,19 +1374,25 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
-                min_samples: Minimum number of samples in a node for it to be eligible
-                    for aggregation. Nodes with at least this many points can be
-                    approximated during queries. Defaults to 10.
-                max_span: Maximum span (diameter) for a node to be aggregated. Nodes with
-                    span (2 * radius) <= max_span and at least min_samples points will be
-                    approximated during queries. Defaults to 0.1.
+                kernel: Kernel function used to determine node error bounds at build time.
+                    Options are:
+                    - "gaussian": Gaussian (normal) kernel (default)
+                    - "epanechnikov": Epanechnikov kernel
+                    - "uniform": Uniform (rectangular) kernel
+                    - "triangular": Triangular kernel
+                bandwidth: Bandwidth used when computing node error bounds at build time.
+                    Defaults to 1.0.
+                atol: Absolute tolerance for approximation. Nodes whose maximum
+                    absolute error is below this threshold are approximated using a
+                    Taylor expansion rather than evaluated exactly. Smaller values
+                    give more accurate results at the cost of speed. Defaults to 0.01.
 
             Returns:
                 A constructed AggTree instance.
 
             Raises:
                 AssertionError: If array is not 2-dimensional.
-                ValueError: If metric is not one of the valid options.
+                ValueError: If metric or kernel is not one of the valid options.
             """
             ...
 

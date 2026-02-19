@@ -70,6 +70,47 @@ impl KernelType {
             KernelType::Uniform => 0.0,
         }
     }
+
+    pub fn third_derivative(&self, r: f64, h: f64) -> f64 {
+        let u = r / h;
+        let h3 = h * h * h;
+        match self {
+            KernelType::Gaussian => {
+                let k = (-0.5 * u * u).exp();
+                (-3.0 * u / h3 + u * u * u / h3) * k / (h * h)
+            }
+            _ => 0.0,
+        }
+    }
+
+    pub fn fourth_derivative(&self, r: f64, h: f64) -> f64 {
+        let u = r / h;
+        let h4 = h.powi(4);
+        match self {
+            KernelType::Gaussian => {
+                let k = (-0.5 * u * u).exp();
+                (u.powi(4) - 6.0 * u * u + 3.0) * k / h4
+            }
+            _ => 0.0,
+        }
+    }
+
+    pub fn node_error_bound(&self, n: f64, radius: f64, h: f64) -> f64 {
+        match self {
+            KernelType::Gaussian => {
+                (n / 120.0) * 7.0 * radius.powi(5) / h.powi(5)
+            }
+            KernelType::Epanechnikov => {
+                n * (radius / h) * 0.75
+            }
+            KernelType::Uniform => {
+                n * (radius / h) * 0.5
+            }
+            KernelType::Triangular => {
+                n * (radius / h) * 1.0
+            }
+        }
+    }
 }
 
 #[inline]

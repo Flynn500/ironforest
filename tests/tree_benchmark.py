@@ -2,6 +2,7 @@ import time
 import ironforest as irn
 import numpy as np
 from sklearn.neighbors import KDTree, BallTree
+from sklearn.datasets import make_blobs
 
 def benchmark_tree_aggtree(
     n_points=100_000,
@@ -26,7 +27,9 @@ def benchmark_tree_aggtree(
             points,
             leaf_size=leaf_size,
             metric="euclidean",
-            max_span=1.75
+            kernel="gaussian",
+            bandwidth=0.5,
+            atol=0.1
         )
         t1 = time.perf_counter()
         build_times.append(t1 - t0)
@@ -138,15 +141,17 @@ def benchmark_tree_sklearn(
 
 
 if __name__ == "__main__":
-    rng = np.random.default_rng(42)
-    points_np = rng.normal(0.0, 1.0, size=(100000, 4))
-    queries_np = rng.normal(0.0, 1.0, size=(20, 4))
+    rng = np.random.default_rng(101)
+
+    all_data, _ = make_blobs(n_samples=101000, centers=20, cluster_std=0.05, n_features=3, random_state=101) # type: ignore
+    points_np = all_data[:100000]
+    queries_np = all_data[100000:]
 
     points_irn = irn.Array.from_numpy(points_np)
     queries_irn = irn.Array.from_numpy(queries_np)
 
     t0 = time.perf_counter()
-    agg_result = irn.spatial.AggTree.from_array(points_irn, leaf_size=32, metric="euclidean", max_span= 1.0) \
+    agg_result = irn.spatial.AggTree.from_array(points_irn,leaf_size=32,metric="euclidean",kernel="gaussian",bandwidth=0.5,atol=0.1) \
         .kernel_density(queries_irn, bandwidth=0.5 , kernel="gaussian", normalize=True)
     t1 = time.perf_counter()
     agg_time = t1-t0

@@ -47,7 +47,7 @@ The approximation test also is not fair to SKlearn as we are comparing an exact 
 Scenarios where our trees may be better are ones where you are willing to tolerate potential inaccuracies and your data is high-dimensional. More robust pruning methods can devolve into brute force KDE calculations in these cases while more naive hard threshold methods are able to maintain some of the performance benifits of tree based KDE. For these high-dimension  scenarios, I'd recommend our vantage point tree or ball tree. Our vantage point tree isn't compared here as it doesn't have an SKLearn equivalent, but it generally performs best in these situations. If you need even more speed and care even less about error margins our aggregate tree is the best option. It is both much more effiecent with memory usage and its query speeds are much faster.
 
 ### Accuracy
-This test was a simple 20 point query against 100,000 points distributed norammly in 4 dimensions with a bandwidth of 0.5. Our aggregate tree used a max span of 1.0, which is quite extreme, this value really shouldn't be set above the bandwidth.
+This test was a simple 20 point query against 100,000 points distributed norammly in 4 dimensions with a bandwidth of 0.5. Our aggregate tree used a max span of 1.0, which is extreme, this value really should never be set above the bandwidth.
 
 Both results below are compared against scikit-learn's KdTree.
 
@@ -69,16 +69,25 @@ The aggregate tree has a higher error margin but significantly better performanc
 
 Our AggTree is a BallTree variant optimized for high query speeds & reduced memory usage at the sacrifice of accuracy. Our AggTree works by trying to reduce our dataset to a series of aggregate nodes based on proximity. Instead of summing the kernel contributions of significant points we sum a mixture from a smaller set of aggregates (alongside raw data that wasn't aggregated).
 
-Tree construction works the exact same as our standard ball tree, the only difference being we stop as soon as we reach a hypersphere that has a diameter smaller than our max span parameter. We then calculate the centroid, variance and number of points in this aggregate node. Our min samples parameter prevents us from aggregating nodes with few children where the exact calculation is cheap. We then recurse through the tree and free all data that belongs to aggregate nodes, the only values we need to calculate their contribution are the centroid, count and variance.
+Tree construction works the exact same as our standard ball tree, but we stop splitting a node when its approximation error is estimated to be below a user-specified absolute tolerance (`atol`). We then calculate the centroid, variance, 3rd & 4th moments of the point-to-centroid distances. We also compute a worst-case error bound for using the Taylor approximation instead of exact evaluation. If this bound falls below `atol`, the node becomes an aggregate leaf and its children are never created.
 
-For queries, we recurse through the tree pruning nodes that are too far away to make a meaninful contribution. This works the same as a ball tree until we reach an aggregate node. We use a second order to calculate our aggregate node contribution:
+The error bounds are kernel-dependent. For the Gaussian kernel, we use a 5th-order Taylor remainder:
 
-$$\hat{K} = n \cdot \left( K(r_c) + \frac{1}{2} K''(r_c) \cdot \sigma^2 \right)$$
+$$\epsilon \leq \frac{n}{120} \cdot \sup|K^{(5)}| \cdot \frac{R^5}{h^5}$$
 
-Where r_c is the second derivative of the kernel with respect to r and variance is given by:
+For compact-support kernels (Epanechnikov, Uniform, Triangular), the polynomial part of the kernel has exact finite-order derivatives, so the only source of error is points straddling the support boundary. We bound this as:
 
-$$\sigma^2 = \frac{1}{n} \sum_{i=1}^{n} \|x_i - \mu\|^2$$
+$$\epsilon \leq n \cdot \frac{R}{h} \cdot K_{\max}$$
 
+Once aggregate nodes are identified, we recurse through the tree and free all data belonging to them — the only values needed to calculate their contribution are the precomputed moments.
+
+For queries, we recurse through the tree pruning nodes that are too far away to make a meaninful contribution. This works the same as a ball tree until we reach an aggregate node. We use a 4th-order Taylor expansion to approximate the aggregate node's contribution:
+
+$$\hat{K} = n \cdot \left( K(r_c) + \frac{1}{2} K''(r_c) \cdot \sigma^2 + \frac{1}{6} K'''(r_c) \cdot \mu_3 + \frac{1}{24} K''''(r_c) \cdot \mu_4 \right)$$
+
+Where $r_c$ is the distance from the query point to the node's centroid, and the moments are:
+
+$$\sigma^2 = \frac{1}{n} \sum_{i=1}^{n} \|x_i - \mu\|^2, \quad \mu_3 = \frac{1}{n} \sum_{i=1}^{n} \|x_i - \mu\|^3, \quad \mu_4 = \frac{1}{n} \sum_{i=1}^{n} \|x_i - \mu\|^4$$
 
 ## Optmizations
 The biggest speedup I've implemented so far was making the trees more cache friendly. Previously the data array remained untouched, while we manipulated an index array to deal with in-tree computations. This seemed fine in principle as we want to return the indices as our result, but it is not cache friendly. After adding a reorder function we increased speeds by 30% across queries. This function just rearranges our data vector so that nodes close to each other a stored nearby. This makes it easier for the CPU to cache values as we aren't jumping to random points in our arrays.

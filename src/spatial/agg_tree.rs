@@ -1,11 +1,13 @@
 use crate::{KernelType, Shape, array::NdArray, spatial::common::DistanceMetric};
 
-
 #[derive(Clone, Debug)]
 pub struct AggNode {
     pub center: Vec<f64>,
     pub radius: f64,
     pub variance: f64,
+    pub moment3: f64,
+    pub moment4: f64,
+    pub max_abs_error: f64,
     pub start: usize,
     pub end: usize,
     pub left: Option<usize>,
@@ -22,12 +24,16 @@ pub struct AggTree {
     pub dim: usize,
     pub leaf_size: usize,
     pub metric: DistanceMetric,
-    pub min_samples: usize,
-    pub max_span: f64,
+    pub kernel: KernelType,
+    pub bandwidth: f64,
+    pub atol: f64,
 }
 
 impl AggTree {
-    pub fn new(points: &[f64], n_points: usize, dim: usize, leaf_size: usize, metric: DistanceMetric, min_samples: usize, max_span: f64) -> Self{
+    pub fn new(
+        points: &[f64], n_points: usize, dim: usize, leaf_size: usize,
+        metric: DistanceMetric, kernel: KernelType, bandwidth: f64, atol: f64,
+    ) -> Self {
         let mut tree = AggTree {
             nodes: Vec::new(),
             indices: (0..n_points).collect(),
@@ -36,23 +42,25 @@ impl AggTree {
             dim,
             leaf_size,
             metric,
-            min_samples,
-            max_span
+            kernel,
+            bandwidth,
+            atol,
         };
 
         tree.build_recursive(0, n_points);
-        
         tree.reorder_data();
-        
+
         let mut live = Vec::new();
         tree.collect_live_ranges(0, &mut live);
         let remap = tree.compact_data(&live);
         tree.remap_nodes(&remap);
-        
+
         tree
     }
 
-    pub fn from_ndarray(array: &NdArray<f64>, leaf_size: usize, metric: DistanceMetric, min_samples: usize, max_span: f64) -> Self {
+    pub fn from_ndarray(array: &NdArray<f64>, leaf_size: usize,
+        metric: DistanceMetric, kernel: KernelType, bandwidth: f64, atol: f64,
+    ) -> Self {
         let shape = array.shape().dims();
         
         assert!(shape.len() == 2, "Expected 2D array (n_points, dim)");
@@ -60,7 +68,7 @@ impl AggTree {
         let n_points = shape[0];
         let dim = shape[1];
         
-        Self::new(array.as_slice(), n_points, dim, leaf_size, metric, min_samples, max_span)
+        Self::new(array.as_slice(), n_points, dim, leaf_size, metric, kernel, bandwidth, atol)
     }
     
     fn reorder_data(&mut self) {
@@ -78,7 +86,7 @@ impl AggTree {
     fn collect_live_ranges(&self, node_idx: usize, live: &mut Vec<(usize, usize)>) {
         let node = &self.nodes[node_idx];
 
-        if self.should_approximate(node) {
+        if node.max_abs_error < self.atol {
             return;
         }
 
@@ -111,12 +119,10 @@ impl AggTree {
     }
 
     fn remap_nodes(&mut self, remap: &[usize]) {
-        let max_span = self.max_span;
-        let min_samples = self.min_samples;
+        let atol = self.atol;
 
         for node in &mut self.nodes {
-            let is_live_leaf = node.left.is_none()
-                && !((node.end - node.start) >= min_samples && 2.0 * node.radius <= max_span);
+            let is_live_leaf = node.left.is_none() && !(node.max_abs_error < atol);
 
             if is_live_leaf {
                 node.start = remap[node.start];
@@ -135,7 +141,7 @@ impl AggTree {
         &self.data[i * dim..(i + 1) * dim]
     }
 
-    fn init_node(&self, start: usize, end: usize) -> (Vec<f64>, f64, f64) {
+    fn init_node(&self, start: usize, end: usize) -> (Vec<f64>, f64, f64, f64, f64) {
         let n = (end - start) as f64;
         let mut centroid = vec![0.0; self.dim];
 
@@ -146,24 +152,30 @@ impl AggTree {
             }
         }
 
-        
         for c in &mut centroid {
             *c /= n;
         }
 
         let mut max_dist: f64 = 0.0;
         let mut variance = 0.0;
+        let mut moment3 = 0.0;
+        let mut moment4 = 0.0;
+
         for i in start..end {
             let p = self.get_point_from_idx(i);
-
             let dist = self.metric.distance(p, &centroid);
-            if  dist > max_dist {max_dist = dist;}
-
-            variance += dist * dist;
+            if dist > max_dist { max_dist = dist; }
+            let d2 = dist * dist;
+            variance += d2;
+            moment3 += d2 * dist;
+            moment4 += d2 * d2;
         }
-        variance /= n;
 
-        (centroid, max_dist, variance)
+        variance /= n;
+        moment3 /= n;
+        moment4 /= n;
+
+        (centroid, max_dist, variance, moment3, moment4)
     }
 
     fn select_split_dim(&self, start: usize, end: usize) -> usize {
@@ -212,13 +224,19 @@ impl AggTree {
 
 
     fn build_recursive(&mut self, start: usize, end: usize) -> usize {
-        let (center, radius, variance) = self.init_node(start, end);
+        let (center, radius, variance, moment3, moment4) = self.init_node(start, end);
+        let n = (end - start) as f64;
+
+        let max_abs_error = self.kernel.node_error_bound(n, radius, self.bandwidth);
 
         let node_idx = self.nodes.len();
         self.nodes.push(AggNode {
             center,
             radius,
             variance,
+            moment3,
+            moment4,
+            max_abs_error,
             start,
             end,
             left: None,
@@ -226,7 +244,7 @@ impl AggTree {
         });
 
         let count = end - start;
-        if count <= self.leaf_size || self.should_approximate(&self.nodes[node_idx]) {
+        if count <= self.leaf_size || max_abs_error < self.atol {
             return node_idx;
         }
 
@@ -257,41 +275,35 @@ impl AggTree {
 
         let k0 = kernel.evaluate(r_c, h);
         let k2 = kernel.evaluate_second_derivative(r_c, h);
+        let k3 = kernel.third_derivative(r_c, h);
+        let k4 = kernel.fourth_derivative(r_c, h);
 
-        n * (k0 + 0.5 * k2 * node.variance)
+        n * (k0 + 0.5 * k2 * node.variance + (1.0 / 6.0) * k3 * node.moment3 + (1.0 / 24.0) * k4 * node.moment4)
     }
-    
-    fn should_approximate(&self, node: &AggNode) -> bool {
-        let node_count = node.end - node.start;
-        let span = 2.0 * node.radius;
-        node_count >= self.min_samples && span <= self.max_span       
-    }
-
 
     fn kde_recursive(&self, node_idx: usize, query: &[f64], h: f64, density: &mut f64, kernel: KernelType) {
         let node = &self.nodes[node_idx];
 
-        if self.should_approximate(node) {
-            *density += self.approx_kde_for_node(query, node, h, kernel);
-            return;
-        }
-        
-        if kernel.evaluate(self.min_distance_to_node(node_idx, query), h) < 1e-10 {
-            return;
-        }
-        
-        if self.nodes[node_idx].left.is_none() {
-            for i in self.nodes[node_idx].start..self.nodes[node_idx].end {
-                let dist = self.metric.distance(query, self.get_point(i));
-                *density += kernel.evaluate(dist, h);
+        if node.left.is_none() {
+            if node.max_abs_error < self.atol {
+                *density += self.approx_kde_for_node(query, node, h, kernel);
+            } else {
+                for i in node.start..node.end {
+                    let dist = self.metric.distance(query, self.get_point(i));
+                    *density += kernel.evaluate(dist, h);
+                }
             }
             return;
         }
 
-        if let Some(left) = self.nodes[node_idx].left {
+        if kernel.evaluate(self.min_distance_to_node(node_idx, query), h) < 1e-10 {
+            return;
+        }
+
+        if let Some(left) = node.left {
             self.kde_recursive(left, query, h, density, kernel);
         }
-        if let Some(right) = self.nodes[node_idx].right {
+        if let Some(right) = node.right {
             self.kde_recursive(right, query, h, density, kernel);
         }
     }

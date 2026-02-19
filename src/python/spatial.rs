@@ -236,20 +236,21 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
         #[pymethods]
         impl PyAggTree {
             #[staticmethod]
-            #[pyo3(signature = (array, leaf_size=20, metric="euclidean", min_samples=10, max_span=0.1))]
+            #[pyo3(signature = (array, leaf_size=20, metric="euclidean", kernel="gaussian", bandwidth=1.0, atol=0.01))]
             fn from_array(
                 array: &PyArray,
                 leaf_size: Option<usize>,
                 metric: Option<&str>,
-                min_samples: Option<usize>,
-                max_span: Option<f64>
+                kernel: Option<&str>,
+                bandwidth: Option<f64>,
+                atol: Option<f64>,
             ) -> PyResult<Self> {
                 let leaf_size = leaf_size.unwrap_or(20);
-                let metric_str = metric.unwrap_or("euclidean");
-                let metric = parse_metric(metric_str)?;
-                let min_samples = min_samples.unwrap_or(10);
-                let max_span = max_span.unwrap_or(0.1);
-                let tree = AggTree::from_ndarray(&array.inner, leaf_size, metric, min_samples, max_span);
+                let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+                let kernel = parse_kernel(kernel.unwrap_or("gaussian"))?;
+                let bandwidth = bandwidth.unwrap_or(1.0);
+                let atol = atol.unwrap_or(0.01);
+                let tree = AggTree::from_ndarray(&array.inner, leaf_size, metric, kernel, bandwidth, atol);
                 Ok(PyAggTree { inner: tree })
             }
 
