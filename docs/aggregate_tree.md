@@ -4,6 +4,8 @@ Our AggTree is a BallTree variant optimized for high query speeds & reduced memo
 
 You can tune how aggresively nodes are aggregated with the `atol` parameter. When using our AggTree it may be worth comparing how this parameter effects error for your usecase against our ball tree. Our error bounds calcuation can be overly conservitive and the true absolute error for a given usecase will often be lower than this absolute tolerance parameter.
 
+### Benchmarks
+
 The following heatmap was generated using a bandwidth of 0.05 and an atol of 0.001
 
 <img width="2708" height="855" alt="kde_heatmap_compare" src="https://github.com/Flynn500/ironforest/blob/003842528571875f611550195d533f31fb73f52d/docs/kde_heatmap_compare.png" />
