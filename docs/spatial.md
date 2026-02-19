@@ -62,6 +62,5 @@ In this particular test our KdTree gives similar results to scikit-learn, even w
 
 The aggregate tree has a higher error margin but significantly better performance and uses far less memory due to us compacting nodes. I'd recommend never setting the max span value above the bandwidth for most use-cases. Increasing the max span beyond this value introduces errors that grow non-linearly.
 
-
-## Optmizations
+## General Optmizations
 The biggest speedup I've implemented so far was making the trees more cache friendly. Previously the data array remained untouched, while we manipulated an index array to deal with in-tree computations. This seemed fine in principle as we want to return the indices as our result, but it is not cache friendly. After adding a reorder function we increased speeds by 30% across queries. This function just rearranges our data vector so that nodes close to each other a stored nearby. This makes it easier for the CPU to cache values as we aren't jumping to random points in our arrays.
