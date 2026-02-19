@@ -77,7 +77,7 @@ impl KernelType {
         match self {
             KernelType::Gaussian => {
                 let k = (-0.5 * u * u).exp();
-                (-3.0 * u / h3 + u * u * u / h3) * k / (h * h)
+                (3.0 * u - u * u * u) / h3 * k
             }
             _ => 0.0,
         }
