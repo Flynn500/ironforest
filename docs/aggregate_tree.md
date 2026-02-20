@@ -6,12 +6,13 @@ You can tune how aggresively nodes are aggregated with the `atol` parameter. Whe
 
 ### Benchmarks 
 
-The following heatmap was generated using a bandwidth of 0.05 and an atol of 0.001
+The following heatmap was generated using a bandwidth of 0.05 and an atol of 0.001. This heatmap is a best-case scenario for our AggTree. The dataset was generated using scikit-learn's make blobs with a STD of 0.04, just below our bandwidth.
 
 <img width="2708" height="855" alt="kde_heatmap_compare" src="https://github.com/Flynn500/ironforest/blob/003842528571875f611550195d533f31fb73f52d/docs/kde_heatmap_compare.png" />
 
+---
 
-The above heatmap is a best-case scenario for our AggTree. The dataset was generated using scikit-learn's make blobs with a STD of 0.04, just below our bandwidth.
+This next benchmark was done on a mixture of uniform noise & scikit-learn's make blobs. Our bandwidth was selected using silverman's rule & an atol value of 0.01 was used.
 
 <div align="center">
 
@@ -25,9 +26,9 @@ The above heatmap is a best-case scenario for our AggTree. The dataset was gener
 
 </div>
 
-This benchmark was done on a mixture of uniform noise & scikit-learn's make blobs. Our bandwidth was selected using silverman's rule & an atol value of 0.01 was used. 
-
 These highlight the best scenarios to use our aggregate tree. If your dataset doesn't contain these high density regions that become that can be aggregated, KDE calculations devolve into standard ball tree methods. The error drops to 0, but you miss out on the memory compacting and speed increases our AggTree was designed for.
+
+I'd also like to note that the dense regions in the above examples were generated radially. I am considering adding alternative aggregation modes that target non-radial regions as well, but our current implementation will breakdown when applied to datasets with highly anisotropic clusters.
 
 ### Implementation
 
@@ -43,7 +44,7 @@ For compact-support kernels (Epanechnikov, Uniform, Triangular), the polynomial 
 
 $$\epsilon \leq n \cdot \frac{R}{h} \cdot K_{\max}$$
 
-Once aggregate nodes are identified, we recurse through the tree and free all data belonging to them — the only values needed to calculate their contribution are the precomputed moments.
+Once aggregate nodes are identified, we recurse through the tree and free all data belonging to them, the only values needed to calculate their contribution are the precomputed moments.
 
 For queries, we recurse through the tree pruning nodes that are too far away to make a meaninful contribution. This works the same as a ball tree until we reach an aggregate node. We use a 4th-order Taylor expansion to approximate the aggregate node's contribution:
 
