@@ -9,8 +9,8 @@ def silvermans_bandwidth(n: int, d: int) -> float:
 
 
 def benchmark_aggtree(points, queries, bandwidth, leaf_size=32):
-    p = irn.Array.from_numpy(points)
-    q = irn.Array.from_numpy(queries)
+    p = irn.ndutils.from_numpy(points)
+    q = irn.ndutils.from_numpy(queries)
 
     t0 = time.perf_counter()
     result = (
@@ -33,33 +33,77 @@ def benchmark_sklearn(points, queries, bandwidth, leaf_size=32):
 
     return np.array(result), t1 - t0
 
+def gen_spherical_clusters():
+    n_blobs = int(n_points * 0.8)
+    n_noise = n_points - n_blobs
+
+    blobs, _ = make_blobs(n_samples=n_blobs, centers=10, cluster_std=0.1, n_features=d, random_state=seed)
+
+    blobs = (blobs - blobs.min(axis=0)) / (blobs.max(axis=0) - blobs.min(axis=0))
+    noise = rng.uniform(0.0, 1.0, size=(n_noise, d))
+
+    points = np.vstack([blobs, noise])
+    rng.shuffle(points)
+
+    queries, _ = make_blobs(n_samples=n_queries, centers=10, cluster_std=0.1, n_features=d, random_state=seed + 1)
+    queries = (queries - queries.min(axis=0)) / (queries.max(axis=0) - queries.min(axis=0))
+    return points, queries
+
+def gen_elliptical_clusters():
+    n_clusters = 12
+    n_blobs = int(n_points * 0.8)
+    n_noise = n_points - n_blobs
+
+    centers = rng.uniform(0.1, 0.9, size=(n_clusters, d))
+    points_per_center = n_blobs // n_clusters
+    blob_list = []
+
+    for c in centers:
+        A = rng.normal(size=(d, d))
+        Q, _ = np.linalg.qr(A)
+        scales = np.exp(rng.uniform(-2.5, -1.0, size=d)) * 0.05
+        cov = Q @ np.diag(scales**2) @ Q.T
+
+        blob = rng.multivariate_normal(mean=c, cov=cov, size=points_per_center)
+        blob_list.append(blob)
+
+    blobs = np.vstack(blob_list)
+    blobs = np.clip(blobs, 0.0, 1.0)
+
+    noise = rng.uniform(0.0, 1.0, size=(n_noise, d))
+    points = np.vstack([blobs, noise])
+    rng.shuffle(points)
+
+    query_centers = rng.uniform(0.1, 0.9, size=(n_clusters, d))
+    points_per_center_q = n_queries // n_clusters
+    queries_list = []
+
+    for c in query_centers:
+        A = rng.normal(size=(d, d))
+        Q, _ = np.linalg.qr(A)
+        scales = np.exp(rng.uniform(-2.5, -1.0, size=d)) * 0.05
+        cov = Q @ np.diag(scales**2) @ Q.T
+
+        qblob = rng.multivariate_normal(mean=c, cov=cov, size=points_per_center_q)
+        queries_list.append(qblob)
+
+    queries = np.vstack(queries_list)
+    queries = np.clip(queries, 0.0, 1.0)
+
+    return points, queries
 
 if __name__ == "__main__":
     n_points = 100_000
     n_queries = 1_000
     dims = [2, 4, 8, 16]
     seed = 42
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(2)
 
     print(f"\n{'dim':>5} {'bw':>8} {'agg_time':>10} {'sk_time':>10} {'speedup':>9} {'max_err%':>10} {'mean_err%':>10}")
     print("-" * 68)
 
     for d in dims:
-
-        # inside the loop, replace the two rng.uniform lines with:
-        n_blobs = int(n_points * 0.8)
-        n_noise = n_points - n_blobs
-
-        blobs, _ = make_blobs(n_samples=n_blobs, centers=10, cluster_std=0.1, n_features=d, random_state=seed)
-        # rescale blobs to [0, 1]
-        blobs = (blobs - blobs.min(axis=0)) / (blobs.max(axis=0) - blobs.min(axis=0))
-        noise = rng.uniform(0.0, 1.0, size=(n_noise, d))
-
-        points = np.vstack([blobs, noise])
-        rng.shuffle(points)
-
-        queries, _ = make_blobs(n_samples=n_queries, centers=10, cluster_std=0.1, n_features=d, random_state=seed + 1)
-        queries = (queries - queries.min(axis=0)) / (queries.max(axis=0) - queries.min(axis=0))
+        points, queries = gen_spherical_clusters()
         bw = silvermans_bandwidth(n_points, d)
 
         agg_vals, agg_time = benchmark_aggtree(points, queries, bw)

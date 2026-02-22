@@ -15,11 +15,57 @@ def make_grid(resolution=200, extent=(0.0, 1.0)):
     grid = np.column_stack([xx.ravel(), yy.ravel()])
     return xx, yy, grid
 
+def gen_elliptical_clusters():
+    n_points = 50000
+    n_queries = 50
+    d = 2
+    rng = np.random.default_rng(2)
+    n_clusters = 12
+    n_blobs = int(n_points * 0.8)
+    n_noise = n_points - n_blobs
+
+    centers = rng.uniform(0.1, 0.9, size=(n_clusters, d))
+    points_per_center = n_blobs // n_clusters
+    blob_list = []
+
+    for c in centers:
+        A = rng.normal(size=(d, d))
+        Q, _ = np.linalg.qr(A)
+        scales = np.exp(rng.uniform(-2.5, -1.0, size=d)) * 0.05
+        cov = Q @ np.diag(scales**2) @ Q.T
+
+        blob = rng.multivariate_normal(mean=c, cov=cov, size=points_per_center)
+        blob_list.append(blob)
+
+    blobs = np.vstack(blob_list)
+    blobs = np.clip(blobs, 0.0, 1.0)
+
+    noise = rng.uniform(0.0, 1.0, size=(n_noise, d))
+    points = np.vstack([blobs, noise])
+    rng.shuffle(points)
+
+    query_centers = rng.uniform(0.1, 0.9, size=(n_clusters, d))
+    points_per_center_q = n_queries // n_clusters
+    queries_list = []
+
+    for c in query_centers:
+        A = rng.normal(size=(d, d))
+        Q, _ = np.linalg.qr(A)
+        scales = np.exp(rng.uniform(-2.5, -1.0, size=d)) * 0.05
+        cov = Q @ np.diag(scales**2) @ Q.T
+
+        qblob = rng.multivariate_normal(mean=c, cov=cov, size=points_per_center_q)
+        queries_list.append(qblob)
+
+    queries = np.vstack(queries_list)
+    queries = np.clip(queries, 0.0, 1.0)
+
+    return points, queries
 
 def run_kde(points_np, grid_np, bandwidth=0.05, leaf_size=32):
     """Run KDE with all 3 methods, return density grids and timings."""
-    points_irn = irn.Array.from_numpy(points_np)
-    grid_irn = irn.Array.from_numpy(grid_np)
+    points_irn = irn.ndutils.from_numpy(points_np)
+    grid_irn = irn.ndutils.from_numpy(grid_np)
 
     # --- AggTree ---
     t0 = time.perf_counter()
@@ -75,10 +121,12 @@ def plot_heatmaps(xx, yy, densities, times, output_path="kde_heatmap_compare.png
 
 if __name__ == "__main__":
     # Generate clustered 2D data
-    points_np, _ = make_blobs( # type: ignore
-        n_samples=50_000, centers=10, cluster_std=0.04,
-        n_features=2, random_state=101,
-    )
+    # points_np, _ = make_blobs( # type: ignore
+    #     n_samples=50_000, centers=10, cluster_std=0.04,
+    #     n_features=2, random_state=101,
+    # )
+
+    points_np, _ = gen_elliptical_clusters()
     # Rescale to [0, 1]
     points_np -= points_np.min(axis=0)
     points_np /= points_np.max(axis=0)

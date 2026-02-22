@@ -1487,3 +1487,126 @@ class spatial:
                 1D Array of approximate density estimates at each training point.
             """
             ...
+
+    class BruteForce:
+        """Brute force nearest neighbor search.
+
+        Computes exact queries by comparing every point in the dataset.
+        No tree structure is built — useful as a correctness baseline or
+        for very small datasets where tree construction overhead is not worthwhile.
+        """
+
+        @staticmethod
+        def from_array(
+            array: Array,
+            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean"
+        ) -> "spatial.BruteForce":
+            """Construct a BruteForce search structure from a 2D array of points.
+
+            Args:
+                array: 2D array of shape (n_points, n_features) containing the data points.
+                metric: Distance metric to use for measuring distances between points.
+                    Options are:
+                    - "euclidean": Standard Euclidean (L2) distance (default)
+                    - "manhattan": Manhattan (L1) distance (taxicab distance)
+                    - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+
+            Returns:
+                A constructed BruteForce instance.
+
+            Raises:
+                AssertionError: If array is not 2-dimensional.
+                ValueError: If metric is not one of the valid options.
+            """
+            ...
+
+        def query_radius(self, query: ArrayLike, radius: float) -> List:
+            """Find all points within a given radius of the query point.
+
+            Args:
+                query: Query point (scalar, list, or array-like).
+                radius: Search radius. All points with distance <= radius are returned.
+
+            Returns:
+                List of row indices for all points within the specified radius.
+            """
+            ...
+
+        def query_knn(self, query: ArrayLike, k: int) -> List[Tuple[int, float]]:
+            """Find the k nearest neighbors to the query point.
+
+            Args:
+                query: Query point (scalar, list, or array-like).
+                k: Number of nearest neighbors to return.
+
+            Returns:
+                List of tuples (index, distance) for the k nearest neighbors,
+                sorted by distance (closest first).
+            """
+            ...
+
+        @overload
+        def kernel_density(
+            self,
+            queries: ArrayLike,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            normalize: bool = True
+        ) -> float:
+            """Estimate kernel density at a single query point.
+
+            Args:
+                queries: Single query point (scalar, list, or array-like).
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Defaults to 1.0.
+                kernel: Kernel function to use. Options: "gaussian", "epanechnikov",
+                    "uniform", "triangular".
+                normalize: Whether to normalize the density estimate. Defaults to False.
+
+            Returns:
+                Density estimate at the query point (float).
+            """
+            ...
+
+        @overload
+        def kernel_density(
+            self,
+            queries: ArrayLike,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            normalize: bool = True
+        ) -> List:
+            """Estimate kernel density at multiple query points.
+
+            Args:
+                queries: 2D array-like of shape (n_queries, n_features).
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Defaults to 1.0.
+                kernel: Kernel function to use. Options: "gaussian", "epanechnikov",
+                    "uniform", "triangular".
+                normalize: Whether to normalize the density estimate. Defaults to False.
+
+            Returns:
+                1D Array of density estimates, one per query point.
+            """
+            ...
+
+        @overload
+        def kernel_density(
+            self,
+            queries: None = None,
+            bandwidth: float = 1.0,
+            kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
+            normalize: bool = True
+        ) -> List:
+            """Estimate kernel density at all training points.
+
+            Args:
+                queries: If None, computes density at each training point.
+                bandwidth: Bandwidth (smoothing parameter) for the kernel. Defaults to 1.0.
+                kernel: Kernel function to use. Options: "gaussian", "epanechnikov",
+                    "uniform", "triangular".
+                normalize: Whether to normalize the density estimate. Defaults to False.
+
+            Returns:
+                1D Array of density estimates at each training point.
+            """
+            ...
