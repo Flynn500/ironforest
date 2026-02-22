@@ -95,7 +95,7 @@ def gen_elliptical_clusters():
 if __name__ == "__main__":
     n_points = 100_000
     n_queries = 1_000
-    dims = [2, 4, 8, 16]
+    dims = [2, 4, 8, 16, 32, 64]
     seed = 42
     rng = np.random.default_rng(2)
 

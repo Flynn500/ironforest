@@ -147,8 +147,8 @@ if __name__ == "__main__":
     points_np = all_data[:100000]
     queries_np = all_data[100000:]
 
-    points_irn = irn.Array.from_numpy(points_np)
-    queries_irn = irn.Array.from_numpy(queries_np)
+    points_irn = irn.ndutils.from_numpy(points_np)
+    queries_irn = irn.ndutils.from_numpy(queries_np)
 
     t0 = time.perf_counter()
     agg_result = irn.spatial.AggTree.from_array(points_irn,leaf_size=32,metric="euclidean",kernel="gaussian",bandwidth=0.5,atol=1e-4) \

@@ -62,6 +62,27 @@ def gen_elliptical_clusters():
 
     return points, queries
 
+def gen_spherical_clusters():
+    seed = 0
+    n_points = 50000
+    n_queries = 50
+    d = 2
+    rng = np.random.default_rng(seed)
+    n_blobs = int(n_points * 0.8)
+    n_noise = n_points - n_blobs
+
+    blobs, _ = make_blobs(n_samples=n_blobs, centers=10, cluster_std=0.1, n_features=d, random_state=seed)
+
+    blobs = (blobs - blobs.min(axis=0)) / (blobs.max(axis=0) - blobs.min(axis=0))
+    noise = rng.uniform(0.0, 1.0, size=(n_noise, d))
+
+    points = np.vstack([blobs, noise])
+    rng.shuffle(points)
+
+    queries, _ = make_blobs(n_samples=n_queries, centers=10, cluster_std=0.1, n_features=d, random_state=seed + 1)
+    queries = (queries - queries.min(axis=0)) / (queries.max(axis=0) - queries.min(axis=0))
+    return points, queries
+
 def run_kde(points_np, grid_np, bandwidth=0.05, leaf_size=32):
     """Run KDE with all 3 methods, return density grids and timings."""
     points_irn = irn.ndutils.from_numpy(points_np)
@@ -120,13 +141,9 @@ def plot_heatmaps(xx, yy, densities, times, output_path="kde_heatmap_compare.png
 
 
 if __name__ == "__main__":
-    # Generate clustered 2D data
-    # points_np, _ = make_blobs( # type: ignore
-    #     n_samples=50_000, centers=10, cluster_std=0.04,
-    #     n_features=2, random_state=101,
-    # )
 
-    points_np, _ = gen_elliptical_clusters()
+    #points_np, _ = gen_elliptical_clusters()
+    points_np, _ = gen_spherical_clusters()
     # Rescale to [0, 1]
     points_np -= points_np.min(axis=0)
     points_np /= points_np.max(axis=0)
