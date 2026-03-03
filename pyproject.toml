@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "ironforest"
 version = "0.5.0"
 requires-python = ">=3.8"
-description = "An library supporting array-based computation, spatial analysis and tree-based machine learning."
+description = "Fast spatial queries and tree-based machine learning."
 readme = "README.md"
 
 [tool.maturin]

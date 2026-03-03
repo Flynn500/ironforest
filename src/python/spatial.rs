@@ -16,7 +16,7 @@ use std::io::{Write, Read};
 //
 // Spatial Result object returns spatial queries in a more ergonomic format. Can
 // immediately get statistics, centroid etc. and split batch queries without the
-// headache of dealing with counts. 
+// headache of dealing with counts (for radius mainly). 
 
 #[pyclass(name = "SpatialResult")]
 pub struct PySpatialResult {
@@ -314,7 +314,7 @@ fn parse_vantage_selection(selection: &str) -> PyResult<VantagePointSelection> {
     match selection.to_lowercase().as_str() {
         "first" => Ok(VantagePointSelection::First),
         "random" => Ok(VantagePointSelection::Random),
-        "variance" => Ok(VantagePointSelection::Variance { sample_size: 10 }),
+        "variance" => Ok(VantagePointSelection::Variance { sample_size: 10 }), //need to expose param or set smarter default
         _ => Err(PyValueError::new_err(format!(
             "Unknown vantage point selection method '{}'. Valid options: 'first', 'random'",
             selection
@@ -968,11 +968,12 @@ impl PyProjectionReducer {
     }
 
     pub fn transform(&self, data: ArrayLike) -> PyResult<PyArray> {
-        let reducer = tree!(self);
+        let reducer = tree!(self); //tree macro just gets from option, maybe rename?
         let mut input_ndarray = data.into_ndarray()?;
         let current_dims = input_ndarray.shape().dims();
+        
+        //allows for users to input 1d arrays instead of ones of "correct" shape
         let was_1d = current_dims.len() == 1;
-
         if was_1d {
             let n_features = current_dims[0];
             input_ndarray = input_ndarray.reshape(vec![1, n_features]);

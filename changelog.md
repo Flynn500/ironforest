@@ -1,8 +1,10 @@
 ## 0.5
 
 ### Added
+- RP-Tree
 - M-Tree
 - Local Regression
+- Projection Reducer object for reducing dimensions
 - Serialization for spatial trees
 - Reshape & linspace methods for arrays
 - Standard __init__ methods for spatial trees that take an ArrayLike input
@@ -10,6 +12,7 @@
 ### Changed
 - kNN & radius spatial queries now return a spatial result object
 - ML models now use rust core for ensemble aggregation
+- Added SIMD instructions to distance kernel & dot product calculations
 
 ### Fixed
 - There were several unsafe unwrap scenarios where instead of a python error being reuturned, the rust side would panic

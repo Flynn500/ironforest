@@ -170,7 +170,7 @@ impl SpatialQuery for KDTree {
         let clamped: Vec<f64> = query.iter().enumerate()
             .map(|(d, &q)| q.clamp(node.bbox_min[d], node.bbox_max[d]))
             .collect();
-        self.metric.distance(&clamped, query)
+        self.metric.reduced_distance(&clamped, query)
     }
 
     fn knn_child_order(&self, node_idx: usize, query: &[f64]) -> (usize, usize) {

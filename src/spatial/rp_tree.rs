@@ -132,7 +132,7 @@ impl RPTree {
 
         if node.left.is_none() {
             for i in node.start..node.end {
-                let dist = self.metric.distance(query, self.get_point(i));
+                let dist = self.metric.reduced_distance(query, self.get_point(i));
                 if heap.len() < k {
                     heap.push(HeapItem { distance: dist, index: self.indices[i] });
                 } else if dist < heap.peek().unwrap().distance {
@@ -172,7 +172,7 @@ impl RPTree {
 
             if node.left.is_none() {
                 for i in node.start..node.end {
-                    let dist = self.metric.distance(query, self.get_point(i));
+                    let dist = self.metric.reduced_distance(query, self.get_point(i));
                     if candidates.len() < n_candidates {
                         candidates.push(HeapItem { distance: dist, index: self.indices[i] });
                     } else if dist < candidates.peek().unwrap().distance {
@@ -251,7 +251,7 @@ impl RPTree {
 
         if node.left.is_none() {
             for i in node.start..node.end {
-                let dist = self.metric.distance(query, self.get_point(i));
+                let dist = self.metric.reduced_distance(query, self.get_point(i));
                 if dist <= radius {
                     results.push((self.indices[i], dist));
                 }

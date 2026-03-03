@@ -2,6 +2,8 @@ use std::collections::BinaryHeap;
 use crate::{array::{NdArray, Shape}, spatial::common::{DistanceMetric, HeapItem, KernelType}};
 use rayon::prelude::*;
 
+//Maybe this should be a single default? will have to run comparisons to see 
+//if query type changes optimal threshold
 const KDE_PAR_THRESHOLD: usize = 512;
 const KNN_PAR_THRESHOLD: usize = 512;
 const RAD_PAR_THRESHOLD: usize = 512;
@@ -28,7 +30,8 @@ pub trait SpatialQuery: Sync {
         (self.node_left(node_idx).unwrap(), self.node_right(node_idx).unwrap())
     }
 
-    //combination of min dist to node and knn order
+    //combination of min dist to node and knn order - we do this to avoid calling dot 
+    //2x for RPTrees, other trees need only implement child order and min dist to node
     fn node_projection(&self, node_idx: usize, query: &[f64]) -> (usize, usize, f64) {
         let dist = self.min_distance_to_node(node_idx, query);
         let (first, second) = self.knn_child_order(node_idx, query);
@@ -42,35 +45,6 @@ pub trait SpatialQuery: Sync {
 
     fn n_points(&self) -> usize;
 
-    fn query_radius(&self, query: &[f64], radius: f64) -> Vec<(usize, f64)> {
-        let mut results = Vec::new();
-        self.query_radius_recursive(self.root(), query, radius, &mut results);
-        results
-    }
-
-    fn query_radius_recursive(&self, node_idx: usize, query: &[f64], radius: f64, results: &mut Vec<(usize, f64)>) {
-        if self.min_distance_to_node(node_idx, query) > radius {
-            return;
-        }
-
-        if self.node_left(node_idx).is_none() {
-            for i in self.node_start(node_idx)..self.node_end(node_idx) {
-                let dist = self.metric().distance(query, self.get_point(i));
-                if dist <= radius {
-                    results.push((self.indices()[i], dist));
-                }
-            }
-            return;
-        }
-
-        if let Some(left) = self.node_left(node_idx) {
-            self.query_radius_recursive(left, query, radius, results);
-        }
-        if let Some(right) = self.node_right(node_idx) {
-            self.query_radius_recursive(right, query, radius, results);
-        }
-    }
-
     fn query_knn(&self, query: &[f64], k: usize) -> Vec<(usize, f64)> {
         if k == 0 || self.n_points() == 0 {
             return Vec::new();
@@ -79,14 +53,14 @@ pub trait SpatialQuery: Sync {
         self.query_knn_recursive(self.root(), query, &mut heap, k);
         heap.into_sorted_vec()
             .into_iter()
-            .map(|item| (item.index, item.distance))
+            .map(|item| (item.index, self.metric().post_transform(item.distance)))
             .collect()
     }
 
     fn query_knn_recursive(&self, node_idx: usize, query: &[f64], heap: &mut BinaryHeap<HeapItem>, k: usize) {
         if self.node_left(node_idx).is_none() {
             for i in self.node_start(node_idx)..self.node_end(node_idx) {
-                let dist = self.metric().distance(query, self.get_point(i));
+                let dist = self.metric().reduced_distance(query, self.get_point(i));
                 if heap.len() < k {
                     heap.push(HeapItem { distance: dist, index: self.indices()[i] });
                 } else if dist < heap.peek().unwrap().distance {
@@ -140,6 +114,35 @@ pub trait SpatialQuery: Sync {
         }
     }
 
+    fn query_radius_recursive(&self, node_idx: usize, query: &[f64], radius: f64, results: &mut Vec<(usize, f64)>) {
+        if self.min_distance_to_node(node_idx, query) > radius {
+            return;
+        }
+
+        if self.node_left(node_idx).is_none() {
+            for i in self.node_start(node_idx)..self.node_end(node_idx) {
+                let dist = self.metric().reduced_distance(query, self.get_point(i));
+                if dist <= radius {
+                    results.push((self.indices()[i], dist));
+                }
+            }
+            return;
+        }
+
+        if let Some(left) = self.node_left(node_idx) {
+            self.query_radius_recursive(left, query, radius, results);
+        }
+        if let Some(right) = self.node_right(node_idx) {
+            self.query_radius_recursive(right, query, radius, results);
+        }
+    }
+
+    fn query_radius(&self, query: &[f64], radius: f64) -> Vec<(usize, f64)> {
+        let mut results = Vec::new();
+        self.query_radius_recursive(self.root(), query, self.metric().pre_transform_radius(radius), &mut results);
+        results
+    }
+
     fn seq_radius_batch(&self, queries: &NdArray<f64>, n_queries: usize, dim: usize, radius: f64) -> Vec<Vec<(usize, f64)>> {
         (0..n_queries)
             .map(|i| {
@@ -167,9 +170,9 @@ pub trait SpatialQuery: Sync {
         assert_eq!(dim, self.dim(), "Query dimension must match tree dimension");
 
         if n_queries >= RAD_PAR_THRESHOLD {
-            self.par_radius_batch(queries, n_queries, dim, radius)
+            self.par_radius_batch(queries, n_queries, dim, self.metric().pre_transform_radius(radius))
         } else {
-            self.seq_radius_batch(queries, n_queries, dim, radius)
+            self.seq_radius_batch(queries, n_queries, dim, self.metric().pre_transform_radius(radius))
         }
     }
 
@@ -181,7 +184,7 @@ pub trait SpatialQuery: Sync {
 
         if self.node_left(node_idx).is_none() {
             for i in self.node_start(node_idx)..self.node_end(node_idx) {
-                let dist = self.metric().distance(query, self.get_point(i));
+                let dist = self.metric().reduced_distance(query, self.get_point(i));
                 *density += kernel.evaluate(dist, h);
             }
             return;

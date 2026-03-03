@@ -40,13 +40,13 @@ impl VantagePointSelection{
                 candidates.iter().max_by(|&&a, &&b| {
                     let pa = data.row(indices[a]).to_vec();
                     let var_a = candidates.iter().map(|&j| {
-                        let d = metric.distance(data.row(indices[j]), &pa);
+                        let d = metric.reduced_distance(data.row(indices[j]), &pa);
                         d * d
                     }).sum::<f64>();
 
                     let pb = data.row(indices[b]).to_vec();
                     let var_b = candidates.iter().map(|&j| {
-                        let d = metric.distance(data.row(indices[j]), &pb);
+                        let d = metric.reduced_distance(data.row(indices[j]), &pb);
                         d * d
                     }).sum::<f64>();
 
@@ -138,7 +138,7 @@ impl VPTree {
         let mut idx_dist: Vec<(usize, f64)> = (start + 1..end)
             .map(|i| {
                 let p = self.data.row(i);
-                let dist = self.metric.distance(p, &vantage_point);
+                let dist = self.metric.reduced_distance(p, &vantage_point);
                 min = min.min(dist);
                 max = max.max(dist);
                 (i, dist)
@@ -218,13 +218,13 @@ impl SpatialQuery for VPTree {
     fn min_distance_to_node(&self, node_idx: usize, query: &[f64]) -> f64 {
         let node = &self.nodes[node_idx];
         let vp = self.get_point(node.start);
-        let d = self.metric.distance(query, vp);
+        let d = self.metric.reduced_distance(query, vp);
         (d - node.max_dist).max(node.min_dist - d).max(0.0)
     }
 
     fn knn_child_order(&self, node_idx: usize, query: &[f64]) -> (usize, usize) {
         let node = &self.nodes[node_idx];
-        let d = self.metric.distance(query, self.get_point(node.start));
+        let d = self.metric.reduced_distance(query, self.get_point(node.start));
         let (l, r) = (node.left.unwrap(), node.right.unwrap());
         if d < node.radius { (l, r) } else { (r, l) }
     }
