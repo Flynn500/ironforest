@@ -157,7 +157,7 @@ impl AggTree {
 
         for i in start..end {
             let p = self.data.row(i);
-            let dist = self.metric.reduced_distance(p, &centroid);
+            let dist = self.metric.post_transform(self.metric.reduced_distance(p, &centroid));
             if dist > max_dist { max_dist = dist; }
             let d2 = dist * dist;
             variance += d2;
@@ -176,8 +176,8 @@ impl AggTree {
     fn furthest_from(&self, query: &[f64], start: usize, end: usize) -> usize {
         (start..end)
             .max_by(|&a, &b| {
-                let da = self.metric.reduced_distance(query, self.data.row(a));
-                let db = self.metric.reduced_distance(query, self.data.row(b));
+                let da = self.metric.post_transform(self.metric.reduced_distance(query, self.data.row(a)));
+                let db = self.metric.post_transform(self.metric.reduced_distance(query, self.data.row(b)));
                 da.partial_cmp(&db).unwrap()
             })
             .unwrap()
@@ -253,20 +253,18 @@ impl AggTree {
 
     fn min_distance_to_node(&self, node_idx: usize, query: &[f64]) -> f64 {
         let node = &self.nodes[node_idx];
-        let d = self.metric.reduced_distance(query, &node.center);
+        let d = self.metric.post_transform(self.metric.reduced_distance(query, &node.center));
         (d - node.radius).max(0.0)
     }
 
     fn approx_kde_for_node(&self, query: &[f64], node: &AggNode, h: f64, kernel: KernelType) -> f64 {
         let n = (node.end - node.start) as f64;
-        let r_c = self.metric.reduced_distance(query, &node.center);
+        let r_c = self.metric.post_transform(self.metric.reduced_distance(query, &node.center));
 
-        let r_c_transformed = self.metric.post_transform(r_c);
-
-        let k0 = kernel.evaluate(r_c_transformed, h);
-        let k2 = kernel.evaluate_second_derivative(r_c_transformed, h);
-        let k3 = kernel.third_derivative(r_c_transformed, h);
-        let k4 = kernel.fourth_derivative(r_c_transformed, h);
+        let k0 = kernel.evaluate(r_c, h);
+        let k2 = kernel.evaluate_second_derivative(r_c, h);
+        let k3 = kernel.third_derivative(r_c, h);
+        let k4 = kernel.fourth_derivative(r_c, h);
 
         n * (k0 + 0.5 * k2 * node.variance + (1.0 / 6.0) * k3 * node.moment3 + (1.0 / 24.0) * k4 * node.moment4)
     }
@@ -279,9 +277,8 @@ impl AggTree {
                 *density += self.approx_kde_for_node(query, node, h, kernel);
             } else {
                 for i in node.start..node.end {
-                    let dist = self.metric.reduced_distance(query, self.data.row(i));
-                    let transformed_dist = self.metric.post_transform(dist);
-                    *density += kernel.evaluate(transformed_dist, h);
+                    let dist = self.metric.post_transform(self.metric.reduced_distance(query, self.data.row(i)));
+                    *density += kernel.evaluate(dist, h);
                 }
             }
             return;

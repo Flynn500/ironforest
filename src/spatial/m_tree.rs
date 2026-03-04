@@ -162,7 +162,7 @@ impl MTree {
         let mut best_cost = f64::MAX;
 
         for (i, entry) in entries.iter().enumerate() {
-            let d = self.metric.reduced_distance(point, &entry.object);
+            let d = self.metric.post_transform(self.metric.reduced_distance(point, &entry.object));
             let cost = if d <= entry.covering_radius {
                 d
             } else {
@@ -184,7 +184,7 @@ impl MTree {
         let MNode::Internal { entries, .. } = &self.nodes[node_idx] else { unreachable!() };
         let child_idx = entries[best_entry_idx].child_idx;
         let parent_obj = entries[best_entry_idx].object.clone();
-        let dist_to_child = self.metric.reduced_distance(&point, &parent_obj);
+        let dist_to_child = self.metric.post_transform(self.metric.reduced_distance(&point, &parent_obj));
 
         let split = self.insert_at(child_idx, point, point_idx, dist_to_child);
 
@@ -193,8 +193,8 @@ impl MTree {
         entries[best_entry_idx].covering_radius = entries[best_entry_idx].covering_radius.max(dist_to_child);
 
         if let Some((mut left, mut right)) = split {
-            left.dist_to_parent = self.metric.reduced_distance(&left.object, &parent_obj);
-            right.dist_to_parent = self.metric.reduced_distance(&right.object, &parent_obj);
+            left.dist_to_parent = self.metric.post_transform(self.metric.reduced_distance(&left.object, &parent_obj));
+            right.dist_to_parent = self.metric.post_transform(self.metric.reduced_distance(&right.object, &parent_obj));
 
             entries[best_entry_idx] = left;
             entries.push(right);
@@ -236,8 +236,8 @@ impl MTree {
         let mut right_entries: Vec<LeafEntry> = Vec::new();
 
         for entry in entries {
-            let d1 = self.metric.reduced_distance(&entry.object, &p1);
-            let d2 = self.metric.reduced_distance(&entry.object, &p2);
+            let d1 = self.metric.post_transform(self.metric.reduced_distance(&entry.object, &p1));
+            let d2 = self.metric.post_transform(self.metric.reduced_distance(&entry.object, &p2));
             if d1 <= d2 {
                 left_entries.push(LeafEntry { dist_to_parent: d1, ..entry });
             } else {
@@ -286,8 +286,8 @@ impl MTree {
         let mut right_entries: Vec<RoutingEntry> = Vec::new();
 
         for mut entry in entries {
-            let d1 = self.metric.reduced_distance(&entry.object, &p1);
-            let d2 = self.metric.reduced_distance(&entry.object, &p2);
+            let d1 = self.metric.post_transform(self.metric.reduced_distance(&entry.object, &p1));
+            let d2 = self.metric.post_transform(self.metric.reduced_distance(&entry.object, &p2));
             if d1 <= d2 {
                 entry.dist_to_parent = d1;
                 left_entries.push(entry);
@@ -341,7 +341,7 @@ impl MTree {
                         0.0
                     };
                     let best = heap.peek().map(|h| h.distance).unwrap_or(f64::MAX);
-                    if heap.len() == k && lb > best {
+                    if heap.len() == k && self.metric.pre_transform_radius(lb) > best {
                         continue;
                     }
 
@@ -363,31 +363,33 @@ impl MTree {
                     } else {
                         0.0
                     };
+                    let lb_child = (lb - entry.covering_radius).max(0.0);
                     let best = heap.peek().map(|h| h.distance).unwrap_or(f64::MAX);
-                    if heap.len() == k && (lb - entry.covering_radius) > best {
+                    if heap.len() == k && self.metric.pre_transform_radius(lb_child) > best {
                         continue;
                     }
 
-                    let d = self.metric.reduced_distance(query, &entry.object);
-                    let min_dist = (d - entry.covering_radius).max(0.0);
+                    let d_real = self.metric.post_transform(self.metric.reduced_distance(query, &entry.object));
+                    let min_dist_real = (d_real - entry.covering_radius).max(0.0);
+                    let min_dist_reduced = self.metric.pre_transform_radius(min_dist_real);
 
                     let best = heap.peek().map(|h| h.distance).unwrap_or(f64::MAX);
-                    if heap.len() == k && min_dist > best {
+                    if heap.len() == k && min_dist_reduced > best {
                         continue;
                     }
 
-                    children.push((min_dist, d, entry.child_idx));
+                    children.push((min_dist_reduced, d_real, entry.child_idx));
                 }
 
                 children.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
-                for (min_dist, d_to_routing, child_idx) in children {
+                for (min_dist_reduced, d_to_routing_real, child_idx) in children {
                     let best = heap.peek().map(|h| h.distance).unwrap_or(f64::MAX);
-                    if heap.len() == k && min_dist > best {
+                    if heap.len() == k && min_dist_reduced > best {
                         break;
                     }
 
-                    self.knn_recursive_inner(child_idx, query, d_to_routing, heap, k);
+                    self.knn_recursive_inner(child_idx, query, d_to_routing_real, heap, k);
                 }
             }
         }
@@ -409,7 +411,7 @@ impl MTree {
                     } else {
                         0.0
                     };
-                    if lb > radius {
+                    if self.metric.pre_transform_radius(lb) > radius {
                         continue;
                     }
 
@@ -427,16 +429,18 @@ impl MTree {
                         0.0
                     };
 
-                    if (lb - entry.covering_radius) > radius {
+                    let lb_child = (lb - entry.covering_radius).max(0.0);
+                    if self.metric.pre_transform_radius(lb_child) > radius {
                         continue;
                     }
 
-                    let d = self.metric.reduced_distance(query, &entry.object);
-                    if (d - entry.covering_radius).max(0.0) > radius {
+                    let d_real = self.metric.post_transform(self.metric.reduced_distance(query, &entry.object));
+                    let min_dist_real = (d_real - entry.covering_radius).max(0.0);
+                    if self.metric.pre_transform_radius(min_dist_real) > radius {
                         continue;
                     }
 
-                    self.radius_recursive_inner(entry.child_idx, query, d, radius, results);
+                    self.radius_recursive_inner(entry.child_idx, query, d_real, radius, results);
                 }
             }
         }

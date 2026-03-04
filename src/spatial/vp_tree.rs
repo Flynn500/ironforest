@@ -147,8 +147,9 @@ impl VPTree {
             .map(|i| {
                 let p = self.data.row(i);
                 let dist = self.metric.reduced_distance(p, &vantage_point);
-                min = min.min(dist);
-                max = max.max(dist);
+                let real_dist = self.metric.post_transform(dist);
+                min = min.min(real_dist);
+                max = max.max(real_dist);
                 (i, dist)
             })
             .collect();
@@ -226,8 +227,9 @@ impl SpatialQuery for VPTree {
     fn min_distance_to_node(&self, node_idx: usize, query: &[f64]) -> f64 {
         let node = &self.nodes[node_idx];
         let vp = self.get_point(node.start);
-        let d = self.metric.reduced_distance(query, vp);
-        (d - node.max_dist).max(node.min_dist - d).max(0.0)
+        let d_real = self.metric.post_transform(self.metric.reduced_distance(query, vp));
+        let min_real = (d_real - node.max_dist).max(node.min_dist - d_real).max(0.0);
+        self.metric.pre_transform_radius(min_real)
     }
 
     fn knn_child_order(&self, node_idx: usize, query: &[f64]) -> (usize, usize) {

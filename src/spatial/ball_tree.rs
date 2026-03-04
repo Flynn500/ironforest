@@ -84,7 +84,7 @@ impl BallTree {
         let mut max_dist: f64 = 0.0;
         for i in start..end {
             let p = self.data.row(self.indices[i]);
-            let dist = self.metric.reduced_distance(p, &centroid);
+            let dist = self.metric.post_transform(self.metric.reduced_distance(p, &centroid));
 
             if  dist > max_dist {
                 max_dist = dist;
@@ -198,8 +198,9 @@ impl SpatialQuery for BallTree {
 
     fn min_distance_to_node(&self, node_idx: usize, query: &[f64]) -> f64 {
         let node = &self.nodes[node_idx];
-        let d = self.metric.reduced_distance(query, &node.center);
-        (d - node.radius).max(0.0)
+        let d = self.metric.post_transform(self.metric.reduced_distance(query, &node.center));
+        let min_real = (d - node.radius).max(0.0);
+        self.metric.pre_transform_radius(min_real)
     }
 
     fn knn_child_order(&self, node_idx: usize, query: &[f64]) -> (usize, usize) {

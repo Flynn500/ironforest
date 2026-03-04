@@ -170,9 +170,9 @@ pub trait SpatialQuery: Sync {
         assert_eq!(dim, self.dim(), "Query dimension must match tree dimension");
 
         if n_queries >= RAD_PAR_THRESHOLD {
-            self.par_radius_batch(queries, n_queries, dim, self.metric().pre_transform_radius(radius))
+            self.par_radius_batch(queries, n_queries, dim, radius)
         } else {
-            self.seq_radius_batch(queries, n_queries, dim, self.metric().pre_transform_radius(radius))
+            self.seq_radius_batch(queries, n_queries, dim, radius)
         }
     }
 
