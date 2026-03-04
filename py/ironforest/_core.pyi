@@ -1162,7 +1162,7 @@ class spatial:
         def from_array(
             array: Array[float],
             leaf_size: int = 20,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean"
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
         ) -> "spatial.BallTree":
             """Construct a ball tree from a 2D array of points.
 
@@ -1176,6 +1176,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
 
             Returns:
                 A constructed BallTree instance.
@@ -1190,7 +1191,7 @@ class spatial:
             self,
             data: ArrayLike,
             leaf_size: int = 20,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean"
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
         ):
             """Construct a ball tree from a 2D array of points.
 
@@ -1204,6 +1205,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
 
             Returns:
                 A constructed BallTree instance.
@@ -1381,7 +1383,7 @@ class spatial:
         def from_array(
             array: Array[float],
             leaf_size: int = 20,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean"
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
         ) -> "spatial.KDTree":
             """Construct a KD-tree from a 2D array of points.
 
@@ -1395,6 +1397,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
 
             Returns:
                 A constructed KDTree instance.
@@ -1409,7 +1412,7 @@ class spatial:
             self,
             data: ArrayLike,
             leaf_size: int = 20,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean"
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
         ):
             """Construct a KD-tree from a 2D array of points.
 
@@ -1423,6 +1426,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
 
             Returns:
                 A constructed KDTree instance.
@@ -1592,7 +1596,7 @@ class spatial:
         def from_array(
             array: Array[float],
             leaf_size: int = 20,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
             selection: Literal["first", "random", "variance"] = "variance"
         ) -> "spatial.VPTree":
             """Construct a vantage-point tree from a 2D array of points.
@@ -1607,6 +1611,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
                 selection: Method for selecting vantage points during tree construction.
                     Options are:
                     - "first": Always select the first point in the partition (default)
@@ -1626,7 +1631,7 @@ class spatial:
             self,
             data: ArrayLike,
             leaf_size: int = 20,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
             selection: Literal["first", "random", "variance"] = "variance"
         ):
             """Construct a vantage-point tree from a 2D array of points.
@@ -1641,6 +1646,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
                 selection: Method for selecting vantage points during tree construction.
                     Options are:
                     - "first": Always select the first point in the partition (default)
@@ -1814,7 +1820,7 @@ class spatial:
         def from_array(
             array: Array[float],
             capacity: int = 50,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean"
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
         ) -> "spatial.MTree":
             """Construct an M-tree from a 2D array of points.
 
@@ -1828,6 +1834,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
 
             Returns:
                 A constructed MTree instance.
@@ -1842,7 +1849,7 @@ class spatial:
             self,
             data: ArrayLike,
             capacity: int = 50,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean"
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
         ):
             """Construct an M-tree from a 2D array of points.
 
@@ -1856,6 +1863,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
 
             Returns:
                 A constructed MTree instance.
@@ -2046,7 +2054,7 @@ class spatial:
         def from_array(
             array: Array[float],
             leaf_size: int = 20,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
             projection: Literal["gaussian", "sparse"] = "gaussian",
             seed: Optional[int] = None,
         ) -> "spatial.RPTree":
@@ -2055,8 +2063,12 @@ class spatial:
             Args:
                 array: 2D array of shape (n_points, n_features) containing the data points.
                 leaf_size: Maximum number of points in a leaf node. Defaults to 20.
-                metric: Distance metric. Options: "euclidean", "manhattan", "chebyshev".
-                    Defaults to "euclidean".
+                metric: Distance metric to use for measuring distances between points.
+                    Options are:
+                    - "euclidean": Standard Euclidean (L2) distance (default)
+                    - "manhattan": Manhattan (L1) distance (taxicab distance)
+                    - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
                 projection: Random projection type used for splitting. Options: "gaussian", , "sparse".
                     Defaults to "gaussian".
                 seed: Optional RNG seed for reproducible tree construction.
@@ -2074,7 +2086,7 @@ class spatial:
             self,
             data: ArrayLike,
             leaf_size: int = 20,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
             projection: Literal["gaussian", "sparse"] = "gaussian",
             seed: Optional[int] = None,
         ):
@@ -2083,8 +2095,12 @@ class spatial:
             Args:
                 data: ArrayLike (n_points, n_features) containing the data points.
                 leaf_size: Maximum number of points in a leaf node. Defaults to 20.
-                metric: Distance metric. Options: "euclidean", "manhattan", "chebyshev".
-                    Defaults to "euclidean".
+                metric: Distance metric to use for measuring distances between points.
+                    Options are:
+                    - "euclidean": Standard Euclidean (L2) distance (default)
+                    - "manhattan": Manhattan (L1) distance (taxicab distance)
+                    - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
                 projection: Random projection type used for splitting. Options: "gaussian", , "sparse".
                     Defaults to "gaussian".
                 seed: Optional RNG seed for reproducible tree construction.
@@ -2202,7 +2218,7 @@ class spatial:
         def from_array(
             array: Array[float],
             leaf_size: int = 20,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
             kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
             bandwidth: float = 1.0,
             atol: float = 0.01,
@@ -2219,6 +2235,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
                 kernel: Kernel function used to determine node error bounds at build time.
                     Options are:
                     - "gaussian": Gaussian (normal) kernel (default)
@@ -2245,7 +2262,7 @@ class spatial:
             self,
             data: ArrayLike,
             leaf_size: int = 20,
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean",
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
             kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
             bandwidth: float = 1.0,
             atol: float = 0.01,
@@ -2262,6 +2279,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
                 kernel: Kernel function used to determine node error bounds at build time.
                     Options are:
                     - "gaussian": Gaussian (normal) kernel (default)
@@ -2374,7 +2392,7 @@ class spatial:
         @staticmethod
         def from_array(
             array: Array[float],
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean"
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
         ) -> "spatial.BruteForce":
             """Construct a BruteForce search structure from a 2D array of points.
 
@@ -2385,6 +2403,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
 
             Returns:
                 A constructed BruteForce instance.
@@ -2398,7 +2417,7 @@ class spatial:
         def __init__(
             self,
             data: Array[float],
-            metric: Literal["euclidean", "manhattan", "chebyshev"] = "euclidean"
+            metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
         ):
             """Construct a BruteForce search structure from a 2D array of points.
 
@@ -2409,6 +2428,7 @@ class spatial:
                     - "euclidean": Standard Euclidean (L2) distance (default)
                     - "manhattan": Manhattan (L1) distance (taxicab distance)
                     - "chebyshev": Chebyshev (L∞) distance (maximum coordinate difference)
+                    - "cosine": The angular distance between two vectors
 
             Returns:
                 A constructed BruteForce instance.

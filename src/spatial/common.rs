@@ -4,28 +4,31 @@ use serde::{Deserialize, Serialize};
 use std::arch::x86_64::*;
 use std::borrow::Cow;
 
+//normalzie for cosine
+#[inline]
+fn normalize(a: &[f64]) -> Vec<f64> {
+    let norm = a.iter().map(|x| x * x).sum::<f64>().sqrt();
+    if norm == 0.0 {
+        a.to_vec()
+    } else {
+        a.iter().map(|x| x / norm).collect()
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum DistanceMetric {
     Euclidean,
     Manhattan,
     Chebyshev,
+    Cosine
 }
 
 impl DistanceMetric {
-    // #[inline]
-    // pub fn distance(self, a: &[f64], b: &[f64]) -> f64 {
-    //     debug_assert_eq!(a.len(), b.len());
-    //     match self {
-    //         DistanceMetric::Euclidean => euclidean(a, b),
-    //         DistanceMetric::Manhattan => manhattan(a, b),
-    //         DistanceMetric::Chebyshev => chebyshev(a, b),
-    //     }
-    // }
-
+    //function applied to data before tree construnction (just normalizing  for cosine currently)
     #[inline]
     pub fn pre_transform<'a>(self, a: &'a [f64]) -> Cow<'a, [f64]> {
         match self {
-            //DistanceMetric::Cosine => Cow::Owned(normalize(a)),
+            DistanceMetric::Cosine => Cow::Owned(normalize(a)),
             _ => Cow::Borrowed(a),
         }
     }
@@ -39,6 +42,8 @@ impl DistanceMetric {
         }
     }
 
+
+    //distance function for in tree calculations
     #[inline]
     pub fn reduced_distance(self, a: &[f64], b: &[f64]) -> f64 {
         debug_assert_eq!(a.len(), b.len());
@@ -46,13 +51,16 @@ impl DistanceMetric {
             DistanceMetric::Euclidean => squared_euclidean(a, b),
             DistanceMetric::Manhattan => manhattan(a, b),
             DistanceMetric::Chebyshev => chebyshev(a, b),
+            DistanceMetric::Cosine => squared_euclidean(a, b),
         }
     }
 
+    //transforms data from reduced function values to true distance values
     #[inline]
     pub fn post_transform(self, dist: f64) -> f64 {
         match self {
             DistanceMetric::Euclidean => dist.sqrt(),
+            DistanceMetric::Cosine => dist / 2.0,
             _ => dist,
         }
     }

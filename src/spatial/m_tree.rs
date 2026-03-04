@@ -83,7 +83,8 @@ impl MTree {
         let mut tree = Self::new(dim, capacity, metric);
 
         for (i, point) in array.as_slice().chunks(dim).enumerate() {
-            tree.insert(point.to_vec(), i);
+            let transformed = metric.pre_transform(point);
+            tree.insert(transformed.into_owned(), i);
         }
         tree
     }
@@ -113,6 +114,7 @@ impl MTree {
     }
 
     pub fn insert(&mut self, point: Vec<f64>, point_idx: usize) {
+        let point = self.metric.pre_transform(&point).into_owned();
         if let Some((mut left, mut right)) = self.insert_at(self.root, point, point_idx, 0.0) {
             left.dist_to_parent = 0.0;
             right.dist_to_parent = 0.0;

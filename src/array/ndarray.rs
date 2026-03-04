@@ -83,6 +83,14 @@ impl<T> NdArray<T> {
         &self.as_slice()[start..start + self.strides[0]]
     }
 
+    pub fn set_row(&mut self, i: usize, values: &[T]) where T: Copy {
+        assert!(self.ndim() >= 2);
+        assert!(i < self.shape.dims()[0]);
+        let start = i * self.strides[0];
+        let row = &mut self.storage.as_mut_slice()[start..start + self.strides[0]];
+        row.copy_from_slice(values);
+    }
+
     pub fn get(&self, indices: &[usize]) -> Option<&T> {
         self.flat_index(indices)
             .and_then(|i| self.storage.get(i))

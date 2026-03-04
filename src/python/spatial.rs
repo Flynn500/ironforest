@@ -290,6 +290,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
         "euclidean" => Ok(DistanceMetric::Euclidean),
         "manhattan" => Ok(DistanceMetric::Manhattan),
         "chebyshev" => Ok(DistanceMetric::Chebyshev),
+        "cosine" => Ok(DistanceMetric::Cosine),
         _ => Err(PyValueError::new_err(format!(
             "Unknown distance metric '{}'. Valid options: 'euclidean', 'manhattan', 'chebyshev'",
             metric

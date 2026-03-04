@@ -26,6 +26,14 @@ impl BruteForce {
         assert!(shape.len() == 2, "Expected 2D array (n_points, dim)");
         let n_points = shape[0];
         let dim = shape[1];
+
+        let mut transformed_data = data.clone();
+        if matches!(metric, DistanceMetric::Cosine) {
+            for i in 0..n_points {
+                let normed = metric.pre_transform(transformed_data.row(i)).into_owned();
+                transformed_data.set_row(i, &normed);
+            }
+        }
         
         let root = BFNode {
             start: 0,
@@ -34,7 +42,7 @@ impl BruteForce {
         BruteForce {
             nodes: vec![root],
             indices: (0..n_points).collect(),
-            data: data.clone(),
+            data: transformed_data,
             n_points,
             dim,
             leaf_size: n_points,
