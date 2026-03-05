@@ -1,7 +1,8 @@
 use std::{cmp::Ordering};
 use crate::{array::{NdArray, Shape}, spatial::common::DistanceMetric};
 use crate::random::Generator;
-use super::spatial_query::{SpatialTree, KnnQuery, RadiusQuery, KdeQuery};
+use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery};
+use crate::spatial::SpatialTree;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
@@ -225,8 +226,10 @@ impl SpatialTree for VPTree {
     fn min_distance_to_node(&self, node_idx: usize, query: &[f64]) -> f64 {
         let node = &self.nodes[node_idx];
         let vp = self.get_point(node.start);
+        //let d = self.metric.distance(query, vp);
         let d = self.metric.distance(query, vp);
-        (d - node.max_dist).max(node.min_dist - d).max(0.0)
+        let shell_bound = (d - node.max_dist).max(node.min_dist - d).max(0.0);
+        shell_bound.min(d) 
     }
 
     fn knn_child_order(&self, node_idx: usize, query: &[f64]) -> (usize, usize) {

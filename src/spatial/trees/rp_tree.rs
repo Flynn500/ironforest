@@ -1,7 +1,8 @@
 use std::collections::BinaryHeap;
 
-use crate::{Generator, array::{NdArray, Shape}, projection::{ProjectionType, RandomProjection, random_projection::ProjectionDirection}, spatial::{HeapItem, KdeQuery, common::DistanceMetric}};
-use super::spatial_query::{SpatialTree, KnnQuery, RadiusQuery};
+use crate::{Generator, array::{NdArray, Shape}, projection::{ProjectionType, RandomProjection, random_projection::ProjectionDirection}, spatial::{HeapItem, common::DistanceMetric}};
+use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery};
+use crate::spatial::SpatialTree;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 

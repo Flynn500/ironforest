@@ -1,5 +1,6 @@
 use crate::{KernelType, array::NdArray, spatial::{HeapItem, common::DistanceMetric}};
-use super::spatial_query::{SpatialTree, KnnQuery, RadiusQuery, KdeQuery};
+use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery};
+use crate::spatial::SpatialTree;
 use serde::{Deserialize, Serialize};
 use std::collections::BinaryHeap;
 

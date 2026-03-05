@@ -1,19 +1,7 @@
-pub(crate) mod kd_tree;
-pub(crate) mod ball_tree;
-pub(crate) mod vp_tree;
-pub(crate) mod m_tree;
-pub(crate) mod rp_tree;
-pub(crate) mod agg_tree;
-pub(crate) mod brute_force;
 pub(crate) mod common;
-pub(crate) mod spatial_query;
+pub(crate) mod queries;
+pub(crate) mod trees;
+pub(crate) mod spatial_tree;
 
-pub use kd_tree::KDTree;
-pub use vp_tree:: {VPTree, VantagePointSelection};
-pub use ball_tree::BallTree;
-pub use m_tree::MTree;
-pub use rp_tree::RPTree;
-pub use agg_tree::AggTree;
-pub use brute_force::BruteForce;
 pub use common::{DistanceMetric, KernelType, HeapItem};
-pub use spatial_query::{SpatialTree, KnnQuery, RadiusQuery, KdeQuery};
+pub use spatial_tree::SpatialTree;

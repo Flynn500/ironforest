@@ -1,5 +1,6 @@
 use crate::{Shape, array::NdArray, spatial::common::DistanceMetric};
-use super::spatial_query::{SpatialTree, KnnQuery, RadiusQuery, KdeQuery};
+use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery};
+use crate::spatial::SpatialTree;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

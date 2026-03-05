@@ -9,7 +9,7 @@ pub mod projection;
 
 pub use array::{NdArray, Shape, Storage, BroadcastIter};
 pub use random::Generator;
-pub use spatial::{BallTree, KDTree, DistanceMetric, KernelType};
+pub use spatial::{DistanceMetric, KernelType};
 
 pub mod python;
 

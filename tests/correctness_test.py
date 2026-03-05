@@ -2,7 +2,6 @@ import numpy as np
 import ironforest as irn
 from ironforest import spatial
 
-# ── Trees under test (RPTree excluded – approximate only) ─────────────────────
 TREES = {
     # "BruteForce":   lambda d, ls: spatial.BruteForce.from_array(d),
     # "KDTree":   lambda d, ls: spatial.KDTree.from_array(d, leaf_size=ls),
@@ -13,18 +12,17 @@ TREES = {
 }
 
 LEAF_SIZE  = 20
-N_POINTS   = 2_000
-N_QUERIES  = 50
+N_POINTS   = 2000
+N_QUERIES  = 100
 K          = 10
 RADIUS     = 0.4
 DIMS       = [2,4,8,16,32]
 
-# ── Brute-force reference (Euclidean) ─────────────────────────────────────────
 
 def bf_knn(data: np.ndarray, queries: np.ndarray, k: int):
     """Returns (indices, distances) arrays, shape (n_queries, k), sorted by distance."""
-    diffs = data[None, :, :] - queries[:, None, :]   # (Q, N, D)
-    dists = np.sqrt((diffs ** 2).sum(axis=-1))        # (Q, N)
+    diffs = data[None, :, :] - queries[:, None, :]
+    dists = np.sqrt((diffs ** 2).sum(axis=-1))
     idx   = np.argsort(dists, axis=1)[:, :k]
     return idx, np.take_along_axis(dists, idx, axis=1)
 
@@ -40,9 +38,8 @@ def bf_radius(data: np.ndarray, queries: np.ndarray, r: float):
         results.append((idx, row[idx]))
     return results
 
-# ── kNN correctness ───────────────────────────────────────────────────────────
 
-PassFail = dict[str, bool]  # tree_name -> passed
+PassFail = dict[str, bool]
 
 def check_knn(data: np.ndarray, queries: np.ndarray, k: int) -> PassFail:
     """Compare each tree's kNN results against brute-force reference."""
@@ -56,8 +53,8 @@ def check_knn(data: np.ndarray, queries: np.ndarray, k: int) -> PassFail:
         tree   = builder(irn_data, LEAF_SIZE)
         result = tree.query_knn(irn_queries, k)
 
-        tree_idx   = np.array(irn.ndutils.to_numpy(result.indices))   # (Q, k)
-        tree_dists = np.array(irn.ndutils.to_numpy(result.distances)) # (Q, k)
+        tree_idx   = np.array(irn.ndutils.to_numpy(result.indices))
+        tree_dists = np.array(irn.ndutils.to_numpy(result.distances))
 
         passed = True
         for q in range(len(queries)):
@@ -81,7 +78,6 @@ def check_knn(data: np.ndarray, queries: np.ndarray, k: int) -> PassFail:
 
     return results
 
-# ── Radius correctness ────────────────────────────────────────────────────────
 
 def check_radius(data: np.ndarray, queries: np.ndarray, r: float) -> PassFail:
     """Compare each tree's radius results against brute-force reference."""
@@ -97,7 +93,7 @@ def check_radius(data: np.ndarray, queries: np.ndarray, r: float) -> PassFail:
 
         passed = True
         for q, single in enumerate(batch.split()):
-            ref_set  = set(ref_results[q][0])                           # brute-force indices
+            ref_set  = set(ref_results[q][0])
             tree_set = set(single.indices.tolist())
 
             if ref_set != tree_set:
@@ -108,7 +104,6 @@ def check_radius(data: np.ndarray, queries: np.ndarray, r: float) -> PassFail:
 
     return results
 
-# ── Runner ────────────────────────────────────────────────────────────────────
 
 def format_results(label: str, dim: int, pass_fail: PassFail):
     status = {name: "✓" if ok else "✗" for name, ok in pass_fail.items()}
@@ -119,7 +114,7 @@ def format_results(label: str, dim: int, pass_fail: PassFail):
 
 def run_correctness_tests():
     rng     = np.random.default_rng(1)
-    failed  = []  # (label, dim, tree_name)
+    failed  = []
 
     print("=== Correctness Tests ===\n")
 
@@ -138,7 +133,6 @@ def run_correctness_tests():
                 if not ok:
                     failed.append((label, dim, name))
 
-    # ── Summary ───────────────────────────────────────────────────────────────
     print(f"\n=== Summary ===")
     if not failed:
         print("All tests passed ✓")
@@ -147,7 +141,6 @@ def run_correctness_tests():
         for label, dim, name in failed:
             print(f"  ✗ {name} {label} dim={dim}")
 
-    # ── Assertions ────────────────────────────────────────────────────────────
     assert not failed, f"Correctness failures: {failed}"
 
 
