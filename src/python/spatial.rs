@@ -336,7 +336,7 @@ fn parse_projection_type(projection: &str, density: f64) -> PyResult<ProjectionT
 }
 
 // =============================================================================
-// Query Macro
+// Query Macros
 // =============================================================================
 
 // Generates query_radius, query_knn, kernel_density, and data methods for any
@@ -345,7 +345,34 @@ fn parse_projection_type(projection: &str, density: f64) -> PyResult<ProjectionT
 // excluded because its kernel_density signature differs. M tree is excluded
 // because underlying data is managed differently so KDE without params becomes
 // difficult, maybe should split KDE out as it also won't really make sense for RPTree
-macro_rules! impl_spatial_query_methods {
+macro_rules! impl_knn_query {
+    ($py_type:ty) => {
+        #[pymethods]
+        impl $py_type {
+            fn query_knn(&self, query: ArrayLike, k: usize) -> PyResult<PySpatialResult> {
+                let is_batch = query.ndim() == 2;
+                let queries_arr = query.into_spatial_query_ndarray(tree!(self).dim)?;
+                let n_queries = queries_arr.shape().dims()[0];
+                if is_batch {
+                    let results = tree!(self).query_knn_batch(&queries_arr, k);
+                    let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
+                        .flatten()
+                        .map(|(i, d)| (i as i64, d))
+                        .unzip();
+                    Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, k))
+                } else {
+                    let query_slice = &queries_arr.as_slice()[..tree!(self).dim];
+                    let results = tree!(self).query_knn(query_slice, k);
+                    let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
+                        .map(|(i, d)| (i as i64, d)).unzip();
+                    Ok(PySpatialResult::from_single(indices, distances))
+                }
+            }
+        }
+    };
+}
+
+macro_rules! impl_radius_query {
     ($py_type:ty) => {
         #[pymethods]
         impl $py_type {
@@ -373,27 +400,14 @@ macro_rules! impl_spatial_query_methods {
                     Ok(PySpatialResult::from_single(indices, distances))
                 }
             }
+        }
+    };
+}
 
-            fn query_knn(&self, query: ArrayLike, k: usize) -> PyResult<PySpatialResult> {
-                let is_batch = query.ndim() == 2;
-                let queries_arr = query.into_spatial_query_ndarray(tree!(self).dim)?;
-                let n_queries = queries_arr.shape().dims()[0];
-                if is_batch {
-                    let results = tree!(self).query_knn_batch(&queries_arr, k);
-                    let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
-                        .flatten()
-                        .map(|(i, d)| (i as i64, d))
-                        .unzip();
-                    Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, k))
-                } else {
-                    let query_slice = &queries_arr.as_slice()[..tree!(self).dim];
-                    let results = tree!(self).query_knn(query_slice, k);
-                    let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
-                        .map(|(i, d)| (i as i64, d)).unzip();
-                    Ok(PySpatialResult::from_single(indices, distances))
-                }
-            }
-
+macro_rules! impl_kde_query {
+    ($py_type:ty) => {
+        #[pymethods]
+        impl $py_type {
             fn kernel_density(
                 &self,
                 py: Python<'_>,
@@ -423,7 +437,14 @@ macro_rules! impl_spatial_query_methods {
                     Ok(PyArray { inner: ArrayData::Float(result) }.into_pyobject(py)?.into_any().unbind())
                 }
             }
+        }
+    };
+}
 
+macro_rules! impl_data_query {
+    ($py_type:ty) => {
+        #[pymethods]
+        impl $py_type {
             #[pyo3(signature = (indices=None))]
             fn data(&self, indices: Option<ArrayLike>) -> PyResult<PyArray> {
                 get_tree_data(tree!(self).indices(), tree!(self).data(), tree!(self).n_points, tree!(self).dim, indices)
@@ -432,11 +453,28 @@ macro_rules! impl_spatial_query_methods {
     };
 }
 
-impl_spatial_query_methods!(PyBallTree);
-impl_spatial_query_methods!(PyKDTree);
-impl_spatial_query_methods!(PyVPTree);
-impl_spatial_query_methods!(PyBruteForce);
-impl_spatial_query_methods!(PyRPTree);
+impl_data_query!(PyBallTree);
+impl_data_query!(PyKDTree);
+impl_data_query!(PyVPTree);
+impl_data_query!(PyBruteForce);
+impl_data_query!(PyRPTree);
+
+impl_knn_query!(PyBallTree);
+impl_knn_query!(PyKDTree);
+impl_knn_query!(PyVPTree);
+impl_knn_query!(PyBruteForce);
+impl_knn_query!(PyRPTree);
+
+impl_radius_query!(PyBallTree);
+impl_radius_query!(PyKDTree);
+impl_radius_query!(PyVPTree);
+impl_radius_query!(PyBruteForce);
+impl_radius_query!(PyRPTree);
+
+impl_kde_query!(PyBallTree);
+impl_kde_query!(PyKDTree);
+impl_kde_query!(PyVPTree);
+impl_kde_query!(PyBruteForce);
 
 
 // =============================================================================
