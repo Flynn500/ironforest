@@ -590,7 +590,7 @@ impl PyBallTree {
     fn from_array(array: &PyArray, leaf_size: Option<usize>, metric: Option<&str>) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let tree = BallTree::new(array.as_float()?, leaf_size, metric);
+        let tree = BallTree::new(array.as_float()?.clone(), leaf_size, metric);
         Ok(PyBallTree { inner: Some(tree) })
     }
 
@@ -604,7 +604,7 @@ impl PyBallTree {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let data = array.into_ndarray()?;
-        let tree = BallTree::new(&data, leaf_size, metric);
+        let tree = BallTree::new(data.clone(), leaf_size, metric);
         Ok(PyBallTree { inner: Some(tree) })
     }
 }
@@ -621,7 +621,7 @@ impl PyKDTree {
     fn from_array(array: &PyArray, leaf_size: Option<usize>, metric: Option<&str>) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let tree = KDTree::new(array.as_float()?, leaf_size, metric);
+        let tree = KDTree::new(array.as_float()?.clone(), leaf_size, metric);
         Ok(PyKDTree { inner: Some(tree) })
     }
 
@@ -635,7 +635,7 @@ impl PyKDTree {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let data = array.into_ndarray()?;
-        let tree = KDTree::new(&data, leaf_size, metric);
+        let tree = KDTree::new(data.clone(), leaf_size, metric);
         Ok(PyKDTree { inner: Some(tree) })
     }
 }
@@ -653,7 +653,7 @@ impl PyVPTree {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let selection_method = parse_vantage_selection(selection.unwrap_or("random"))?;
-        let tree = VPTree::new(array.as_float()?, leaf_size, metric, selection_method);
+        let tree = VPTree::new(array.as_float()?.clone(), leaf_size, metric, selection_method);
         Ok(PyVPTree { inner: Some(tree) })
     }
 
@@ -669,7 +669,7 @@ impl PyVPTree {
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let selection_method = parse_vantage_selection(selection.unwrap_or("random"))?;
         let data = array.into_ndarray()?;
-        let tree = VPTree::new(&data, leaf_size, metric, selection_method);
+        let tree = VPTree::new(data.clone(), leaf_size, metric, selection_method);
         Ok(PyVPTree { inner: Some(tree) })
     }
 }
@@ -688,7 +688,7 @@ impl PyRPTree {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0/(data.ndim() as f64).sqrt())?;
-        let tree = RPTree::new(data, leaf_size, metric, projection_method, seed);
+        let tree = RPTree::new(data.clone(), leaf_size, metric, projection_method, seed);
         Ok(PyRPTree { inner: Some(tree) })
     }
 
@@ -707,7 +707,7 @@ impl PyRPTree {
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0/f64::sqrt(data.ndim() as f64))?;
 
-        let tree = RPTree::new(&data, leaf_size, metric, projection_method, seed);
+        let tree = RPTree::new(data.clone(), leaf_size, metric, projection_method, seed);
         Ok(PyRPTree{ inner: Some(tree) })
     }
 }
@@ -723,7 +723,7 @@ impl PyBruteForce {
     #[pyo3(signature = (array, metric="euclidean"))]
     fn from_array(array: &PyArray, metric: Option<&str>) -> PyResult<Self> {
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let tree = BruteForce::new(array.as_float()?, metric);
+        let tree = BruteForce::new(array.as_float()?.clone(), metric);
         Ok(PyBruteForce { inner: Some(tree) })
     }
 
@@ -735,7 +735,7 @@ impl PyBruteForce {
     ) -> PyResult<Self> {
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let data = array.into_ndarray()?;
-        let tree = BruteForce::new(&data, metric);
+        let tree = BruteForce::new(data.clone(), metric);
         Ok(PyBruteForce { inner: Some(tree) })
     }
 }
@@ -762,7 +762,7 @@ impl PyAggTree {
         let kernel = parse_kernel(kernel.unwrap_or("gaussian"))?;
         let bandwidth = bandwidth.unwrap_or(1.0);
         let atol = atol.unwrap_or(0.01);
-        let tree = AggTree::new(array.as_float()?, leaf_size, metric, kernel, bandwidth, atol);
+        let tree = AggTree::new(array.as_float()?.clone(), leaf_size, metric, kernel, bandwidth, atol);
         Ok(PyAggTree { inner: Some(tree) })
     }
 
@@ -782,7 +782,7 @@ impl PyAggTree {
         let bandwidth = bandwidth.unwrap_or(1.0);
         let atol = atol.unwrap_or(0.01);
         let data = array.into_ndarray()?;
-        let tree = AggTree::new(&data, leaf_size, metric, kernel, bandwidth, atol);
+        let tree = AggTree::new(data.clone(), leaf_size, metric, kernel, bandwidth, atol);
         Ok(PyAggTree { inner: Some(tree) })
     }
 

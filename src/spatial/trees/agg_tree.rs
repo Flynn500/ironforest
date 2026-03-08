@@ -37,7 +37,7 @@ pub struct AggTree {
 
 impl AggTree {
     pub fn new(
-        data: &NdArray<f64>, leaf_size: usize,metric: DistanceMetric, 
+        mut data: NdArray<f64>, leaf_size: usize,metric: DistanceMetric, 
         kernel: KernelType, bandwidth: f64, atol: f64,
     ) -> Self {
         let shape = data.shape().dims();
@@ -45,18 +45,17 @@ impl AggTree {
         let n_points = shape[0];
         let dim = shape[1];
 
-        let mut transformed_data = data.clone();
         if matches!(metric, DistanceMetric::Cosine) {
             for i in 0..n_points {
-                let normed = metric.pre_transform(transformed_data.row(i)).into_owned();
-                transformed_data.set_row(i, &normed);
+                let normed = metric.pre_transform(data.row(i)).into_owned();
+                data.set_row(i, &normed);
             }
         }
 
         let mut tree = AggTree {
             nodes: Vec::new(),
             indices: (0..n_points).collect(),
-            data: transformed_data,
+            data: data,
             n_points,
             dim,
             leaf_size,

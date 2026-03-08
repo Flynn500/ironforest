@@ -34,7 +34,7 @@ pub struct RPTree {
 
 impl RPTree {
     pub fn new(
-        data: &NdArray<f64>,
+        mut data: NdArray<f64>,
         leaf_size: usize,
         metric: DistanceMetric,
         projection_type: ProjectionType,
@@ -47,18 +47,17 @@ impl RPTree {
 
         let rng = Generator::from_seed(seed);
 
-        let mut transformed_data = data.clone();
         if matches!(metric, DistanceMetric::Cosine) {
             for i in 0..n_points {
-                let normed = metric.pre_transform(transformed_data.row(i)).into_owned();
-                transformed_data.set_row(i, &normed);
+                let normed = metric.pre_transform(data.row(i)).into_owned();
+                data.set_row(i, &normed);
             }
         }
 
         let mut tree = RPTree {
             nodes: Vec::new(),
             indices: (0..n_points).collect(),
-            data: transformed_data,
+            data: data,
             n_points,
             dim,
             leaf_size,
