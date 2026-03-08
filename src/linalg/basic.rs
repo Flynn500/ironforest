@@ -1,5 +1,6 @@
 use crate::array::ndarray::NdArray;
 use crate::array::shape::Shape;
+#[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
 #[cfg(target_arch = "x86_64")]
