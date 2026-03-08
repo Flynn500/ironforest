@@ -1,6 +1,7 @@
 use std::{cmp::Ordering};
 use crate::stats::special::gamma;
 use serde::{Deserialize, Serialize};
+#[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 use std::borrow::Cow;
 
@@ -115,6 +116,8 @@ unsafe fn squared_euclidean_single_acc(a: &[f64], b: &[f64]) -> f64 {
 }
 
 #[inline(always)]
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
 unsafe fn squared_euclidean_multi_acc(a: &[f64], b: &[f64]) -> f64 {
     let n = a.len();
     let chunks = n / 16;
