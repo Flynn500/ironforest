@@ -68,6 +68,7 @@ fn quantile(py: Python<'_>, a: &PyArray, q: ArrayLike) -> PyResult<Py<PyAny>> {
             let q_arr = q.into_ndarray()?;
             Ok(PyArray {
                 inner: ArrayData::Float(arr.quantiles(q_arr.as_slice())),
+                alive: true
             }.into_pyobject(py)?.into_any().unbind())
         }
     }

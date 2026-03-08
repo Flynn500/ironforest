@@ -67,6 +67,7 @@ pub fn column_stack(arrays: Vec<PyArray>) -> PyResult<PyArray> {
     let array_refs: Vec<&NdArray<f64>> = float_arrays.iter().collect();
     Ok(PyArray {
         inner: ArrayData::Float(NdArray::column_stack(&array_refs)),
+        alive: true
     })
 }
 
@@ -76,6 +77,7 @@ fn outer(a: ArrayLike, b: ArrayLike) -> PyResult<PyArray> {
     let b_arr = b.into_ndarray()?;
     Ok(PyArray {
         inner: ArrayData::Float(NdArray::outer(&a_arr, &b_arr)),
+        alive: true
     })
 }
 
@@ -114,7 +116,7 @@ fn linspace(_py: Python<'_>, start: ArrayLike, stop: ArrayLike, num: i64) -> PyR
         dims
     });
     let our_arr = NdArray::from_vec(out_shape, data);
-    Ok(PyArray { inner: ArrayData::Float(our_arr) })
+    Ok(PyArray { inner: ArrayData::Float(our_arr), alive: true })
 }
 
 #[pyfunction]
@@ -129,6 +131,7 @@ fn from_numpy(_py: Python<'_>, arr: &Bound<'_, PyAny>) -> PyResult<PyArray> {
             let data: Vec<f64> = numpy_arr.as_slice()?.to_vec();
             Ok(PyArray {
                 inner: ArrayData::Float(NdArray::from_vec(Shape::new(shape), data)),
+                alive: true
             })
         }
         "i" | "u" => {
@@ -136,7 +139,7 @@ fn from_numpy(_py: Python<'_>, arr: &Bound<'_, PyAny>) -> PyResult<PyArray> {
             let shape = numpy_arr.shape().to_vec();
             let data: Vec<i64> = numpy_arr.as_slice()?.to_vec();
             Ok(PyArray {
-                inner: ArrayData::Int(NdArray::from_vec(Shape::new(shape), data)),
+                inner: ArrayData::Int(NdArray::from_vec(Shape::new(shape), data)), alive: true,
             })
         }
         other => Err(PyTypeError::new_err(format!(

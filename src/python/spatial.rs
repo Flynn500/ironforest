@@ -36,8 +36,8 @@ impl PySpatialResult {
     pub fn from_single(indices: Vec<i64>, distances: Vec<f64>) -> Self {
         let n = indices.len();
         PySpatialResult {
-            indices: PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::d1(n), indices)) },
-            distances: PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::d1(n), distances)) },
+            indices: PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::d1(n), indices)), alive: true },
+            distances: PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::d1(n), distances)), alive: true },
             counts: None,
             n_queries: 1,
             k: None,
@@ -46,8 +46,8 @@ impl PySpatialResult {
 
     pub fn from_batch_knn(indices: Vec<i64>, distances: Vec<f64>, n_queries: usize, k: usize) -> Self {
         PySpatialResult {
-            indices: PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::new(vec![n_queries, k]), indices)) },
-            distances: PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::new(vec![n_queries, k]), distances)) },
+            indices: PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::new(vec![n_queries, k]), indices)), alive: true },
+            distances: PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::new(vec![n_queries, k]), distances)), alive: true },
             counts: None,
             n_queries,
             k: Some(k),
@@ -58,9 +58,9 @@ impl PySpatialResult {
         let n_queries = counts.len();
         let total = indices.len();
         PySpatialResult {
-            indices: PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::d1(total), indices)) },
-            distances: PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::d1(total), distances)) },
-            counts: Some(PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::d1(n_queries), counts)) }),
+            indices: PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::d1(total), indices)), alive: true },
+            distances: PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::d1(total), distances)), alive: true },
+            counts: Some(PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::d1(n_queries), counts)), alive: true }),
             n_queries,
             k: None,
         }
@@ -199,9 +199,9 @@ impl PySpatialResult {
 
         let n_queries = chunks.len();
         if self.n_queries == 1 {
-            Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::d1(dim), result)) })
+            Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::d1(dim), result)), alive: true })
         } else {
-            Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::new(vec![n_queries, dim]), result)) })
+            Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::new(vec![n_queries, dim]), result)), alive: true })
         }
     }
 }
@@ -225,6 +225,7 @@ fn scalar_or_array(py: Python<'_>, values: Vec<f64>, is_single: bool) -> PyResul
         let n = values.len();
         Ok(PyArray {
             inner: ArrayData::Float(NdArray::from_vec(Shape::d1(n), values)),
+            alive: true
         }.into_pyobject(py)?.into_any().unbind())
     }
 }
@@ -258,6 +259,7 @@ fn get_tree_data(
                 Shape::new(vec![n_points, dim]),
                 original_data,
             )),
+            alive: true
         }),
         Some(idx) => {
             let idx_arr = idx.into_i64_ndarray()?;
@@ -278,6 +280,7 @@ fn get_tree_data(
                     Shape::new(vec![k, dim]),
                     result,
                 )),
+                alive: true
             })
         }
     }
@@ -465,7 +468,7 @@ macro_rules! impl_kde_query {
                 if result.shape().dims()[0] == 1 {
                     Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
                 } else {
-                    Ok(PyArray { inner: ArrayData::Float(result) }.into_pyobject(py)?.into_any().unbind())
+                    Ok(PyArray { inner: ArrayData::Float(result), alive: true }.into_pyobject(py)?.into_any().unbind())
                 }
             }
         }
@@ -806,7 +809,7 @@ impl PyAggTree {
         if result.shape().dims()[0] == 1 {
             Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
         } else {
-            Ok(PyArray { inner: ArrayData::Float(result) }.into_pyobject(py)?.into_any().unbind())
+            Ok(PyArray { inner: ArrayData::Float(result), alive: true }.into_pyobject(py)?.into_any().unbind())
         }
     }
 }
@@ -1015,7 +1018,7 @@ impl PyProjectionReducer {
 
         Ok((
             PyProjectionReducer { inner: Some(reducer) },
-            PyArray { inner: ArrayData::Float(transformed) }
+            PyArray { inner: ArrayData::Float(transformed), alive: true }
         ))
     }
 
@@ -1041,10 +1044,10 @@ impl PyProjectionReducer {
         let transformed = reducer.transform(&input_ndarray);
         if was_1d {
             let len = transformed.as_slice().len();
-            return Ok(PyArray { inner: ArrayData::Float(transformed.reshape(vec![len])) });
+            return Ok(PyArray { inner: ArrayData::Float(transformed.reshape(vec![len])), alive: true });
         }
 
-        Ok(PyArray { inner: ArrayData::Float(transformed) })
+        Ok(PyArray { inner: ArrayData::Float(transformed), alive: true })
     }
 
     #[getter]

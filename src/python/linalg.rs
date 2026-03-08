@@ -21,37 +21,37 @@ pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[pyfunction]
 fn matmul(a: ArrayLike, b: ArrayLike) -> PyResult<PyArray> {
-    Ok(PyArray { inner: ArrayData::Float(a.into_ndarray()?.matmul(&b.into_ndarray()?)) })
+    Ok(PyArray { inner: ArrayData::Float(a.into_ndarray()?.matmul(&b.into_ndarray()?)), alive: true })
 }
 
 #[pyfunction]
 fn dot(a: ArrayLike, b: ArrayLike) -> PyResult<PyArray> {
-    Ok(PyArray { inner: ArrayData::Float(a.into_ndarray()?.dot(&b.into_ndarray()?)) })
+    Ok(PyArray { inner: ArrayData::Float(a.into_ndarray()?.dot(&b.into_ndarray()?)), alive: true })
 }
 
 #[pyfunction]
 fn transpose(a: ArrayLike) -> PyResult<PyArray> {
-    Ok(PyArray { inner: ArrayData::Float(a.into_ndarray()?.transpose()) })
+    Ok(PyArray { inner: ArrayData::Float(a.into_ndarray()?.transpose()), alive: true })
 }
 
 #[pyfunction]
 fn cholesky(a: ArrayLike) -> PyResult<PyArray> {
     a.into_ndarray()?.cholesky()
-        .map(|l| PyArray { inner: ArrayData::Float(l) })
+        .map(|l| PyArray { inner: ArrayData::Float(l), alive: true })
         .map_err(|e| PyValueError::new_err(e))
 }
 
 #[pyfunction]
 fn qr(a: ArrayLike) -> PyResult<(PyArray, PyArray)> {
     a.into_ndarray()?.qr()
-        .map(|(q, r)| (PyArray { inner: ArrayData::Float(q) }, PyArray { inner: ArrayData::Float(r) }))
+        .map(|(q, r)| (PyArray { inner: ArrayData::Float(q), alive: true }, PyArray { inner: ArrayData::Float(r), alive: true }))
         .map_err(|e| PyValueError::new_err(e))
 }
 
 #[pyfunction]
 fn eig(a: ArrayLike) -> PyResult<(PyArray, PyArray)> {
     a.into_ndarray()?.eig()
-        .map(|(vals, vecs)| (PyArray { inner: ArrayData::Float(vals) }, PyArray { inner: ArrayData::Float(vecs) }))
+        .map(|(vals, vecs)| (PyArray { inner: ArrayData::Float(vals), alive: true }, PyArray { inner: ArrayData::Float(vecs), alive: true }))
         .map_err(|e| PyValueError::new_err(e))
 }
 
@@ -59,14 +59,14 @@ fn eig(a: ArrayLike) -> PyResult<(PyArray, PyArray)> {
 #[pyo3(signature = (a, max_iter=1000, tol=1e-10))]
 fn eig_with_params(a: ArrayLike, max_iter: usize, tol: f64) -> PyResult<(PyArray, PyArray)> {
     a.into_ndarray()?.eig_with_params(max_iter, tol)
-        .map(|(vals, vecs)| (PyArray { inner: ArrayData::Float(vals) }, PyArray { inner: ArrayData::Float(vecs) }))
+        .map(|(vals, vecs)| (PyArray { inner: ArrayData::Float(vals), alive: true }, PyArray { inner: ArrayData::Float(vecs), alive: true }))
         .map_err(|e| PyValueError::new_err(e))
 }
 
 #[pyfunction]
 fn eigvals(a: ArrayLike) -> PyResult<PyArray> {
     a.into_ndarray()?.eigvals()
-        .map(|vals| PyArray { inner: ArrayData::Float(vals) })
+        .map(|vals| PyArray { inner: ArrayData::Float(vals), alive: true })
         .map_err(|e| PyValueError::new_err(e))
 }
 
@@ -79,6 +79,7 @@ fn diagonal(a: ArrayLike, k: Option<isize>) -> PyResult<PyArray> {
     }
     Ok(PyArray {
         inner: ArrayData::Float(arr.diagonal(k.unwrap_or(0))),
+        alive: true
     })
 }
 
@@ -88,6 +89,7 @@ fn outer(a: ArrayLike, b: ArrayLike) -> PyResult<PyArray> {
     let b_arr = b.into_ndarray()?;
     Ok(PyArray {
         inner: ArrayData::Float(NdArray::outer(&a_arr, &b_arr)),
+        alive: true
     })
 }
 
@@ -101,7 +103,7 @@ fn lstsq(a: ArrayLike, b: ArrayLike) -> PyResult<(PyArray, PyArray)> {
     let ax = aarr.matmul(&x);
     let residuals = &barr - &ax;
 
-    Ok((PyArray { inner: ArrayData::Float(x) }, PyArray { inner: ArrayData::Float(residuals) }))
+    Ok((PyArray { inner: ArrayData::Float(x), alive: true }, PyArray { inner: ArrayData::Float(residuals), alive: true }))
 }
 
 #[pyfunction]
@@ -137,5 +139,5 @@ fn weighted_lstsq(a: ArrayLike, b: ArrayLike, weights: ArrayLike) -> PyResult<(P
         NdArray::from_vec(crate::array::shape::Shape::d2(m, b_cols), res)
     };
 
-    Ok((PyArray { inner: ArrayData::Float(x) }, PyArray { inner: ArrayData::Float(weighted_res) }))
+    Ok((PyArray { inner: ArrayData::Float(x), alive: true }, PyArray { inner: ArrayData::Float(weighted_res), alive: true }))
 }

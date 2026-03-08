@@ -386,6 +386,11 @@ class stats:
         """Median of all elements."""
         ...
 
+    @staticmethod
+    def mode(a: ArrayLike) -> float | int:
+        """Mode of all elements."""
+        ...
+
     @overload
     @staticmethod
     def quantile(a: ArrayLike, q: float) -> float:

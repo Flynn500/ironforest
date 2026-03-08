@@ -112,3 +112,28 @@ impl NdArray<f64> {
             .fold(f64::INFINITY, f64::min)
     }
 }
+
+impl<T> NdArray<T> {
+    pub fn mode(&self) -> T where T: PartialEq + Copy {
+        assert!(!self.is_empty(), "mode() called on empty array");
+
+        let slice = self.as_slice();
+        let mut best_val = slice[0];
+        let mut best_count = 0usize;
+
+        for &val in slice {
+            let mut count = 0usize;
+            for &other in slice {
+                if val == other {
+                    count += 1;
+                }
+            }
+            if count > best_count {
+                best_count = count;
+                best_val = val;
+            }
+        }
+
+        best_val
+    }
+}

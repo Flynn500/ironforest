@@ -40,18 +40,21 @@ impl PyGenerator {
     fn uniform(&mut self, low: f64, high: f64, shape: Vec<usize>) -> PyArray {
         PyArray {
             inner: ArrayData::Float(self.inner.uniform(low, high, Shape::new(shape))),
+            alive: true
         }
     }
 
     fn standard_normal(&mut self, shape: Vec<usize>) -> PyArray {
         PyArray {
             inner: ArrayData::Float(self.inner.standard_normal(Shape::new(shape))),
+            alive: true
         }
     }
 
     fn normal(&mut self, mu: f64, sigma: f64, shape: Vec<usize>) -> PyArray {
         PyArray {
             inner: ArrayData::Float(self.inner.normal(mu, sigma, Shape::new(shape))),
+            alive: true
         }
     }
 
@@ -60,24 +63,28 @@ impl PyGenerator {
         let data: Vec<f64> = arr.as_slice().iter().map(|&x| x as f64).collect();
         PyArray {
             inner: ArrayData::Float(NdArray::from_vec(Shape::new(shape), data)),
+            alive: true
         }
     }
 
     fn gamma(&mut self, shape_param: f64, scale: f64, shape: Vec<usize>) -> PyArray {
         PyArray {
             inner: ArrayData::Float(self.inner.gamma(shape_param, scale, Shape::new(shape))),
+            alive: true
         }
     }
 
     fn beta(&mut self, alpha: f64, beta_param: f64, shape: Vec<usize>) -> PyArray {
         PyArray {
             inner: ArrayData::Float(self.inner.beta(alpha, beta_param, Shape::new(shape))),
+            alive: true
         }
     }
 
     fn lognormal(&mut self, mu: f64, sigma: f64, shape: Vec<usize>) -> PyArray {
         PyArray {
             inner: ArrayData::Float(self.inner.lognormal(mu, sigma, Shape::new(shape))),
+            alive: true
         }
     }
 }

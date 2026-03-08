@@ -29,7 +29,7 @@ impl PyArray {
             ArrayData::Int(NdArray::zeros(Shape::new(shape)))
         } else {
             ArrayData::Float(NdArray::zeros(Shape::new(shape)))
-        }})
+        }, alive: true})
     }
 
     #[staticmethod]
@@ -39,7 +39,7 @@ impl PyArray {
             ArrayData::Int(NdArray::<i64>::ones(Shape::new(shape)))
         } else {
             ArrayData::Float(NdArray::<f64>::ones(Shape::new(shape)))
-        }})
+        }, alive: true})
     }
 
     #[staticmethod]
@@ -49,7 +49,7 @@ impl PyArray {
             ArrayData::Int(NdArray::filled(Shape::new(shape), fill_value as i64))
         } else {
             ArrayData::Float(NdArray::full(Shape::new(shape), fill_value))
-        }})
+        }, alive: true})
     }
 
     #[staticmethod]
@@ -76,7 +76,7 @@ impl PyArray {
             } else {
                 arr
             };
-            Ok(PyArray { inner: ArrayData::Int(arr) })
+            Ok(PyArray { inner: ArrayData::Int(arr), alive: true })
         } else {
             let arr = data.into_ndarray()?;
             let arr = if let Some(s) = shape {
@@ -91,7 +91,7 @@ impl PyArray {
             } else {
                 arr
             };
-            Ok(PyArray { inner: ArrayData::Float(arr) })
+            Ok(PyArray { inner: ArrayData::Float(arr), alive: true})
         }
     }
 
@@ -102,14 +102,14 @@ impl PyArray {
             ArrayData::Int(NdArray::<i64>::eye(n, m, k.unwrap_or(0)))
         } else {
             ArrayData::Float(NdArray::<f64>::eye(n, m, k.unwrap_or(0)))
-        }})
+        }, alive: true})
     }
 
     #[staticmethod]
     #[pyo3(signature = (v, k=None))]
     pub fn diag(v: ArrayLike, k: Option<isize>) -> PyResult<Self> {
         let v_arr = v.into_ndarray()?;
-        Ok(PyArray { inner: ArrayData::Float(NdArray::from_diag(&v_arr, k.unwrap_or(0))) })
+        Ok(PyArray { inner: ArrayData::Float(NdArray::from_diag(&v_arr, k.unwrap_or(0))), alive: true})
     }
 
     #[pyo3(signature = (k=None))]
@@ -118,7 +118,7 @@ impl PyArray {
         if a.ndim() != 2 {
             return Err(PyValueError::new_err("diagonal requires a 2D array"));
         }
-        Ok(PyArray { inner: ArrayData::Float(a.diagonal(k.unwrap_or(0))) })
+        Ok(PyArray { inner: ArrayData::Float(a.diagonal(k.unwrap_or(0))), alive: true })
     }
 
     #[new]
@@ -133,9 +133,9 @@ impl PyArray {
         }
         if parse_dtype(dtype)? {
             let int_data: Vec<i64> = data.iter().map(|&x| x as i64).collect();
-            Ok(PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::new(shape), int_data)) })
+            Ok(PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::new(shape), int_data)), alive: true })
         } else {
-            Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::new(shape), data)) })
+            Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::new(shape), data)), alive: true })
         }
     }
 
@@ -144,24 +144,28 @@ impl PyArray {
     // -------------------------------------------------------------------------
 
     #[getter]
-    fn shape(&self) -> Vec<usize> {
-        self.dims()
+    fn shape(&self) -> PyResult<Vec<usize>> {
+        check_alive!(self);
+        Ok(self.dims())
     }
 
     #[getter]
-    fn ndim(&self) -> usize {
-        self.ndim_val()
+    fn ndim(&self) -> PyResult<usize> {
+        check_alive!(self);
+        Ok(self.ndim_val())
     }
 
     #[getter]
-    fn dtype(&self) -> &'static str {
+    fn dtype(&self) -> PyResult<&'static str> {
+        check_alive!(self);
         match &self.inner {
-            ArrayData::Float(_) => "float64",
-            ArrayData::Int(_) => "int64",
+            ArrayData::Float(_) => Ok("float64"),
+            ArrayData::Int(_) => Ok("int64"),
         }
     }
 
     fn get(&self, py: Python<'_>, indices: Vec<usize>) -> PyResult<Py<PyAny>> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(a) => a.get(&indices).copied()
                 .ok_or_else(|| PyValueError::new_err("Index out of bounds"))
@@ -177,6 +181,7 @@ impl PyArray {
     // -------------------------------------------------------------------------
 
     pub fn tolist(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(a) => {
                 if a.shape().ndim() == 0 {
@@ -198,82 +203,110 @@ impl PyArray {
     // -------------------------------------------------------------------------
 
     fn sin(&self) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.sin()) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.sin()), alive: true })
     }
 
     fn cos(&self) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.cos()) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.cos()), alive: true })
     }
 
     fn exp(&self) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.exp()) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.exp()), alive: true })
     }
 
     fn sqrt(&self) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.sqrt()) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.sqrt()), alive: true })
     }
 
     fn clip(&self, min: f64, max: f64) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.clip(min, max)) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.clip(min, max)), alive: true })
     }
 
     fn tan(&self) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.tan()) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.tan()), alive: true })
     }
 
     fn arcsin(&self) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.asin()) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.asin()), alive: true })
     }
 
     fn arccos(&self) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.acos()) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.acos()), alive: true })
     }
 
     fn arctan(&self) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.atan()) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.atan()), alive: true })
     }
 
     fn log(&self) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.log()) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.log()), alive: true })
     }
 
     fn abs(&self) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.abs()) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.abs()), alive: true })
     }
 
     fn sign(&self) -> PyResult<Self> {
-        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.sign()) })
+        check_alive!(self);
+        Ok(PyArray { inner: ArrayData::Float(self.as_float()?.sign()), alive: true })
     }
 
     fn sum(&self) -> PyResult<f64> {
+        check_alive!(self);
         Ok(self.as_float()?.sum())
     }
 
     fn mean(&self) -> PyResult<f64> {
+        check_alive!(self);
         Ok(self.as_float()?.mean())
     }
 
+    fn mode(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        check_alive!(self);
+        match &self.inner {
+            ArrayData::Float(a) => Ok(a.mode().into_pyobject(py)?.into_any().unbind()),
+            ArrayData::Int(a) => Ok(a.mode().into_pyobject(py)?.into_any().unbind()),
+        }
+    }
+
     fn var(&self) -> PyResult<f64> {
+        check_alive!(self);
         Ok(self.as_float()?.var())
     }
 
     fn std(&self) -> PyResult<f64> {
+        check_alive!(self);
         Ok(self.as_float()?.std())
     }
 
     fn median(&self) -> PyResult<f64> {
+        check_alive!(self);
         Ok(self.as_float()?.median())
     }
 
     fn max(&self) -> PyResult<f64> {
+        check_alive!(self);
         Ok(self.as_float()?.max())
     }
 
     fn min(&self) -> PyResult<f64> {
+        check_alive!(self);
         Ok(self.as_float()?.min())
     }
 
     fn quantile(&self, py: Python<'_>, q: ArrayLike) -> PyResult<Py<PyAny>> {
+        check_alive!(self);
         let a = self.as_float()?;
         match q {
             ArrayLike::Scalar(q_val) => {
@@ -285,17 +318,19 @@ impl PyArray {
             _ => {
                 let q_arr = q.into_ndarray()?;
                 Ok(PyArray {
-                    inner: ArrayData::Float(a.quantiles(q_arr.as_slice())),
+                    inner: ArrayData::Float(a.quantiles(q_arr.as_slice())), alive: true
                 }.into_pyobject(py)?.into_any().unbind())
             }
         }
     }
 
     fn any(&self) -> PyResult<bool> {
+        check_alive!(self);
         Ok(self.as_float()?.any())
     }
 
     fn all(&self) -> PyResult<bool> {
+        check_alive!(self);
         Ok(self.as_float()?.all())
     }
 
@@ -304,20 +339,21 @@ impl PyArray {
     // -------------------------------------------------------------------------
 
     fn __add__(&self, other: ArrayLike) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(lhs) => match other {
-                ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs + s) }),
-                ArrayLike::IntScalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs + (s as f64)) }),
-                _ => Ok(PyArray { inner: ArrayData::Float(lhs + &other.into_ndarray()?) }),
+                ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs + s), alive: true }),
+                ArrayLike::IntScalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs + (s as f64)), alive: true }),
+                _ => Ok(PyArray { inner: ArrayData::Float(lhs + &other.into_ndarray()?), alive: true }),
             },
             ArrayData::Int(lhs) => {
                 if other.is_int() {
-                    Ok(PyArray { inner: ArrayData::Int(lhs + &other.into_i64_ndarray()?) })
+                    Ok(PyArray { inner: ArrayData::Int(lhs + &other.into_i64_ndarray()?), alive: true })
                 } else {
                     let lhs_f = lhs.map(|x| x as f64);
                     match other {
-                        ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs_f + s) }),
-                        _ => Ok(PyArray { inner: ArrayData::Float(lhs_f + &other.into_ndarray()?) }),
+                        ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs_f + s), alive: true }),
+                        _ => Ok(PyArray { inner: ArrayData::Float(lhs_f + &other.into_ndarray()?), alive: true }),
                     }
                 }
             }
@@ -325,38 +361,40 @@ impl PyArray {
     }
 
     fn __radd__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(a) => {
                 let s: f64 = other.extract()?;
-                Ok(PyArray { inner: ArrayData::Float(s + a) })
+                Ok(PyArray { inner: ArrayData::Float(s + a), alive: true })
             }
             ArrayData::Int(a) => {
                 if let Ok(s) = other.extract::<i64>() {
-                    Ok(PyArray { inner: ArrayData::Int(s + a.clone()) })
+                    Ok(PyArray { inner: ArrayData::Int(s + a.clone()), alive: true })
                 } else {
                     let s: f64 = other.extract()?;
                     let af = a.map(|x| x as f64);
-                    Ok(PyArray { inner: ArrayData::Float(s + &af) })
+                    Ok(PyArray { inner: ArrayData::Float(s + &af), alive: true })
                 }
             }
         }
     }
 
     fn __sub__(&self, other: ArrayLike) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(lhs) => match other {
-                ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs - s) }),
-                ArrayLike::IntScalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs - (s as f64)) }),
-                _ => Ok(PyArray { inner: ArrayData::Float(lhs - &other.into_ndarray()?) }),
+                ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs - s), alive: true }),
+                ArrayLike::IntScalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs - (s as f64)), alive: true }),
+                _ => Ok(PyArray { inner: ArrayData::Float(lhs - &other.into_ndarray()?), alive: true }),
             },
             ArrayData::Int(lhs) => {
                 if other.is_int() {
-                    Ok(PyArray { inner: ArrayData::Int(lhs - &other.into_i64_ndarray()?) })
+                    Ok(PyArray { inner: ArrayData::Int(lhs - &other.into_i64_ndarray()?), alive: true })
                 } else {
                     let lhs_f = lhs.map(|x| x as f64);
                     match other {
-                        ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs_f - s) }),
-                        _ => Ok(PyArray { inner: ArrayData::Float(lhs_f - &other.into_ndarray()?) }),
+                        ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs_f - s), alive: true }),
+                        _ => Ok(PyArray { inner: ArrayData::Float(lhs_f - &other.into_ndarray()?), alive: true }),
                     }
                 }
             }
@@ -364,38 +402,40 @@ impl PyArray {
     }
 
     fn __rsub__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(a) => {
                 let s: f64 = other.extract()?;
-                Ok(PyArray { inner: ArrayData::Float(s - a) })
+                Ok(PyArray { inner: ArrayData::Float(s - a), alive: true })
             }
             ArrayData::Int(a) => {
                 if let Ok(s) = other.extract::<i64>() {
-                    Ok(PyArray { inner: ArrayData::Int(s - a.clone()) })
+                    Ok(PyArray { inner: ArrayData::Int(s - a.clone()), alive: true })
                 } else {
                     let s: f64 = other.extract()?;
                     let af = a.map(|x| x as f64);
-                    Ok(PyArray { inner: ArrayData::Float(s - &af) })
+                    Ok(PyArray { inner: ArrayData::Float(s - &af), alive: true})
                 }
             }
         }
     }
 
     fn __mul__(&self, other: ArrayLike) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(lhs) => match other {
-                ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs * s) }),
-                ArrayLike::IntScalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs * (s as f64)) }),
-                _ => Ok(PyArray { inner: ArrayData::Float(lhs * &other.into_ndarray()?) }),
+                ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs * s), alive: true }),
+                ArrayLike::IntScalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs * (s as f64)), alive: true }),
+                _ => Ok(PyArray { inner: ArrayData::Float(lhs * &other.into_ndarray()?), alive: true }),
             },
             ArrayData::Int(lhs) => {
                 if other.is_int() {
-                    Ok(PyArray { inner: ArrayData::Int(lhs * &other.into_i64_ndarray()?) })
+                    Ok(PyArray { inner: ArrayData::Int(lhs * &other.into_i64_ndarray()?), alive: true })
                 } else {
                     let lhs_f = lhs.map(|x| x as f64);
                     match other {
-                        ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs_f * s) }),
-                        _ => Ok(PyArray { inner: ArrayData::Float(lhs_f * &other.into_ndarray()?) }),
+                        ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs_f * s), alive: true }),
+                        _ => Ok(PyArray { inner: ArrayData::Float(lhs_f * &other.into_ndarray()?), alive: true }),
                     }
                 }
             }
@@ -403,59 +443,63 @@ impl PyArray {
     }
 
     fn __rmul__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(a) => {
                 let s: f64 = other.extract()?;
-                Ok(PyArray { inner: ArrayData::Float(s * a) })
+                Ok(PyArray { inner: ArrayData::Float(s * a), alive: true })
             }
             ArrayData::Int(a) => {
                 if let Ok(s) = other.extract::<i64>() {
-                    Ok(PyArray { inner: ArrayData::Int(s * a.clone()) })
+                    Ok(PyArray { inner: ArrayData::Int(s * a.clone()), alive: true })
                 } else {
                     let s: f64 = other.extract()?;
                     let af = a.map(|x| x as f64);
-                    Ok(PyArray { inner: ArrayData::Float(s * &af) })
+                    Ok(PyArray { inner: ArrayData::Float(s * &af), alive: true })
                 }
             }
         }
     }
 
     fn __truediv__(&self, other: ArrayLike) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(lhs) => match other {
-                ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs / s) }),
-                ArrayLike::IntScalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs / (s as f64)) }),
-                _ => Ok(PyArray { inner: ArrayData::Float(lhs / &other.into_ndarray()?) }),
+                ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs / s), alive: true }),
+                ArrayLike::IntScalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs / (s as f64)), alive: true }),
+                _ => Ok(PyArray { inner: ArrayData::Float(lhs / &other.into_ndarray()?), alive: true }),
             },
             ArrayData::Int(lhs) => {
                 let lhs_f = lhs.map(|x| x as f64);
                 match other {
-                    ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs_f / s) }),
-                    ArrayLike::IntScalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs_f / (s as f64)) }),
-                    _ => Ok(PyArray { inner: ArrayData::Float(lhs_f / &other.into_ndarray()?) }),
+                    ArrayLike::Scalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs_f / s), alive: true }),
+                    ArrayLike::IntScalar(s) => Ok(PyArray { inner: ArrayData::Float(lhs_f / (s as f64)), alive: true }),
+                    _ => Ok(PyArray { inner: ArrayData::Float(lhs_f / &other.into_ndarray()?), alive: true }),
                 }
             }
         }
     }
 
     fn __rtruediv__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(a) => {
                 let s: f64 = other.extract()?;
-                Ok(PyArray { inner: ArrayData::Float(s / a) })
+                Ok(PyArray { inner: ArrayData::Float(s / a), alive: true })
             }
             ArrayData::Int(a) => {
                 let s: f64 = other.extract()?;
                 let af = a.map(|x| x as f64);
-                Ok(PyArray { inner: ArrayData::Float(s / &af) })
+                Ok(PyArray { inner: ArrayData::Float(s / &af), alive: true })
             }
         }
     }
 
-    fn __neg__(&self) -> Self {
+    fn __neg__(&self) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
-            ArrayData::Float(a) => PyArray { inner: ArrayData::Float(-a) },
-            ArrayData::Int(a) => PyArray { inner: ArrayData::Int(-a) },
+            ArrayData::Float(a) => Ok(PyArray { inner: ArrayData::Float(-a), alive: true }),
+            ArrayData::Int(a) => Ok(PyArray { inner: ArrayData::Int(-a), alive: true }),
         }
     }
 
@@ -475,6 +519,7 @@ impl PyArray {
     }
 
     fn __pow__(&self, exp: ArrayLike, _modulo: Option<i64>) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(a) => {
                 let data: Vec<f64> = match exp {
@@ -493,7 +538,7 @@ impl PyArray {
                         a.as_slice().iter().zip(rhs.as_slice().iter()).map(|(&x, &e)| x.powf(e)).collect()
                     }
                 };
-                Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(a.shape().clone(), data)) })
+                Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(a.shape().clone(), data)), alive: true })
             }
             ArrayData::Int(a) => {
                 let data: Vec<f64> = match exp {
@@ -512,71 +557,80 @@ impl PyArray {
                         a.as_slice().iter().zip(rhs.as_slice().iter()).map(|(&x, &e)| (x as f64).powf(e)).collect()
                     }
                 };
-                Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(a.shape().clone(), data)) })
+                Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(a.shape().clone(), data)), alive: true })
             }
         }
     }
 
     fn __rpow__(&self, base: &Bound<'_, PyAny>, _modulo: Option<i64>) -> PyResult<Self> {
+        check_alive!(self);
         let b = if let Ok(v) = base.extract::<f64>() { v }
                 else { base.extract::<i64>()? as f64 };
         match &self.inner {
             ArrayData::Float(a) =>
-                Ok(PyArray { inner: ArrayData::Float(a.map(|x| b.powf(x))) }),
+                Ok(PyArray { inner: ArrayData::Float(a.map(|x| b.powf(x))), alive: true }),
             ArrayData::Int(a) => {
                 let data: Vec<f64> = a.as_slice().iter().map(|&x| b.powf(x as f64)).collect();
-                Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(a.shape().clone(), data)) })
+                Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(a.shape().clone(), data)), alive: true })
             }
         }
     }
 
     fn __matmul__(&self, other: &PyArray) -> PyResult<Self> {
+        check_alive!(self);
         let a = self.as_float()?;
         let b = other.as_float()?;
-        Ok(PyArray { inner: ArrayData::Float(a.matmul(b)) })
+        Ok(PyArray { inner: ArrayData::Float(a.matmul(b)), alive: true })
     }
 
     fn matmul(&self, other: &PyArray) -> PyResult<Self> {
+        check_alive!(self);
         let a = self.as_float()?;
         let b = other.as_float()?;
-        Ok(PyArray { inner: ArrayData::Float(a.matmul(b)) })
+        Ok(PyArray { inner: ArrayData::Float(a.matmul(b)), alive: true })
     }
 
     fn dot(&self, other: &PyArray) -> PyResult<Self> {
+        check_alive!(self);
         let a = self.as_float()?;
         let b = other.as_float()?;
-        Ok(PyArray { inner: ArrayData::Float(a.dot(b)) })
+        Ok(PyArray { inner: ArrayData::Float(a.dot(b)), alive: true })
     }
 
-    fn transpose(&self) -> Self {
+    fn transpose(&self) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
-            ArrayData::Float(a) => PyArray { inner: ArrayData::Float(a.transpose()) },
-            ArrayData::Int(a) => PyArray { inner: ArrayData::Int(a.transpose()) },
+            ArrayData::Float(a) => Ok(PyArray { inner: ArrayData::Float(a.transpose()), alive: true }),
+            ArrayData::Int(a) => Ok(PyArray { inner: ArrayData::Int(a.transpose()), alive: true }),
         }
     }
 
-    fn t(&self) -> Self {
+    fn t(&self) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
-            ArrayData::Float(a) => PyArray { inner: ArrayData::Float(a.t()) },
-            ArrayData::Int(a) => PyArray { inner: ArrayData::Int(a.t()) },
+            ArrayData::Float(a) => Ok(PyArray { inner: ArrayData::Float(a.t()), alive: true }),
+            ArrayData::Int(a) => Ok(PyArray { inner: ArrayData::Int(a.t()), alive: true }),
         }
     }
 
-    fn ravel(&self) -> Self {
+    fn ravel(&self) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
-            ArrayData::Float(a) => PyArray { inner: ArrayData::Float(a.ravel()) },
-            ArrayData::Int(a) => PyArray { inner: ArrayData::Int(a.ravel()) },
+            ArrayData::Float(a) => Ok(PyArray { inner: ArrayData::Float(a.ravel()), alive: true }),
+            ArrayData::Int(a) => Ok(PyArray { inner: ArrayData::Int(a.ravel()), alive: true }),
         }
     }
 
-    fn take(&self, indices: Vec<usize>) -> Self {
+    fn take(&self, indices: Vec<usize>) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
-            ArrayData::Float(a) => PyArray { inner: ArrayData::Float(a.take(&indices)) },
-            ArrayData::Int(a) => PyArray { inner: ArrayData::Int(a.take(&indices)) },
+            ArrayData::Float(a) => Ok(PyArray { inner: ArrayData::Float(a.take(&indices)), alive: true }),
+            ArrayData::Int(a) => Ok(PyArray { inner: ArrayData::Int(a.take(&indices)), alive: true }),
         }
     }
 
     fn reshape(&self, shape: Vec<usize>) -> PyResult<Self> {
+        check_alive!(self);
         let total: usize = shape.iter().product();
         match &self.inner {
             ArrayData::Float(a) => {
@@ -586,7 +640,7 @@ impl PyArray {
                         a.len(), shape
                     )));
                 }
-                Ok(PyArray { inner: ArrayData::Float(a.reshape(shape)) })
+                Ok(PyArray { inner: ArrayData::Float(a.reshape(shape)), alive: true  })
             }
             ArrayData::Int(a) => {
                 if a.len() != total {
@@ -595,12 +649,13 @@ impl PyArray {
                         a.len(), shape
                     )));
                 }
-                Ok(PyArray { inner: ArrayData::Int(a.reshape(shape)) })
+                Ok(PyArray { inner: ArrayData::Int(a.reshape(shape)), alive: true  })
             }
         }
     }
 
     fn item(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(a) => {
                 if a.len() != 1 {
@@ -624,6 +679,7 @@ impl PyArray {
     }
 
     pub fn to_numpy<'py>(&self, py: Python<'py>) -> PyResult<Py<PyAny>> {
+        check_alive!(self);
         use numpy::IntoPyArray;
         match &self.inner {
             ArrayData::Float(a) => {
@@ -641,6 +697,7 @@ impl PyArray {
 
     #[pyo3(signature = (dtype=None))]
     fn __array__(&self, py: Python<'_>, dtype: Option<&Bound<'_, PyAny>>) -> PyResult<Py<PyAny>> {
+        check_alive!(self);
         let arr = self.to_numpy(py)?;
 
         if let Some(dtype) = dtype {
@@ -651,21 +708,23 @@ impl PyArray {
         Ok(arr)
     }
 
-    fn __repr__(&self) -> String {
+    fn __repr__(&self) -> PyResult<String> {
+        check_alive!(self);
         match &self.inner {
-            ArrayData::Float(a) => format!(
+            ArrayData::Float(a) => Ok(format!(
                 "Array(dtype=float64, shape={:?}, data={:?})",
                 a.shape().dims(), a.as_slice()
-            ),
-            ArrayData::Int(a) => format!(
+            )),
+            ArrayData::Int(a) => Ok(format!(
                 "Array(dtype=int64, shape={:?}, data={:?})",
                 a.shape().dims(), a.as_slice()
-            ),
+            )),
         }
     }
 
-    fn __len__(&self) -> usize {
-        self.len_val()
+    fn __len__(&self) -> PyResult<usize> {
+        check_alive!(self);
+        Ok(self.len_val())
     }
 
     // -------------------------------------------------------------------------
@@ -673,6 +732,7 @@ impl PyArray {
     // -------------------------------------------------------------------------
 
     fn __getitem__(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        check_alive!(self);
         let dims = self.dims();
         let ndim = dims.len();
 
@@ -801,6 +861,7 @@ impl PyArray {
     }
 
     fn __setitem__(&mut self, key: &Bound<'_, PyAny>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        check_alive!(self);
         let dims = self.dims();
         let ndim = dims.len();
 
@@ -889,6 +950,7 @@ impl PyArray {
     }
 
     fn __contains__(&self, value: &Bound<'_, PyAny>) -> PyResult<bool> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(a) => {
                 let v: f64 = value.extract()?;
@@ -909,6 +971,7 @@ impl PyArray {
     /// `1.0`/`0.0` (float arrays) or `1`/`0` (int arrays). Both operands are
     /// compared as `f64`; int arrays are cast before the predicate is evaluated.
     fn apply_cmp(&self, other: ArrayLike, cmp: impl Fn(f64, f64) -> bool) -> PyResult<Self> {
+        check_alive!(self);
         match &self.inner {
             ArrayData::Float(a) => {
                 let data: Vec<f64> = match other {
@@ -932,7 +995,7 @@ impl PyArray {
                             .map(|(&x, &y)| if cmp(x, y) { 1.0 } else { 0.0 }).collect()
                     }
                 };
-                Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(a.shape().clone(), data)) })
+                Ok(PyArray { inner: ArrayData::Float(NdArray::from_vec(a.shape().clone(), data)), alive: true })
             }
             ArrayData::Int(a) => {
                 let data: Vec<i64> = match other {
@@ -956,7 +1019,7 @@ impl PyArray {
                             .map(|(&x, &y)| if cmp(x as f64, y as f64) { 1 } else { 0 }).collect()
                     }
                 };
-                Ok(PyArray { inner: ArrayData::Int(NdArray::from_vec(a.shape().clone(), data)) })
+                Ok(PyArray { inner: ArrayData::Int(NdArray::from_vec(a.shape().clone(), data)), alive: true })
             }
         }
     }
@@ -964,6 +1027,7 @@ impl PyArray {
     /// Filters the first axis by a boolean mask and returns the surviving rows as a PyArray.
     /// Errors if `mask.len()` doesn't match the first dimension.
     fn apply_bool_mask_py(&self, mask: &[bool], py: Python<'_>) -> PyResult<Py<PyAny>> {
+        check_alive!(self);
         let dims = self.dims();
         if dims.is_empty() {
             return Err(PyValueError::new_err("Cannot apply boolean mask to scalar"));
@@ -975,8 +1039,8 @@ impl PyArray {
             )));
         }
         let result = match &self.inner {
-            ArrayData::Float(a) => PyArray { inner: ArrayData::Float(a.boolean_mask(mask)) },
-            ArrayData::Int(a) => PyArray { inner: ArrayData::Int(a.boolean_mask(mask)) },
+            ArrayData::Float(a) => PyArray { inner: ArrayData::Float(a.boolean_mask(mask)), alive: true },
+            ArrayData::Int(a) => PyArray { inner: ArrayData::Int(a.boolean_mask(mask)), alive: true },
         };
         Ok(result.into_pyobject(py)?.into_any().unbind())
     }
@@ -1042,10 +1106,10 @@ impl PyArray {
         match &self.inner {
             ArrayData::Float(a) => PyArray { inner: ArrayData::Float(
                 NdArray::from_vec(Shape::new(dims), a.as_slice()[start..start + size].to_vec())
-            )},
+            ), alive: true},
             ArrayData::Int(a) => PyArray { inner: ArrayData::Int(
                 NdArray::from_vec(Shape::new(dims), a.as_slice()[start..start + size].to_vec())
-            )},
+            ), alive: true},
         }
     }
 
@@ -1055,11 +1119,11 @@ impl PyArray {
         match &self.inner {
             ArrayData::Float(a) => {
                 let data: Vec<f64> = flat_indices.iter().map(|&i| a.as_slice()[i]).collect();
-                PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::d1(data.len()), data)) }
+                PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::d1(data.len()), data)), alive: true }
             }
             ArrayData::Int(a) => {
                 let data: Vec<i64> = flat_indices.iter().map(|&i| a.as_slice()[i]).collect();
-                PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::d1(data.len()), data)) }
+                PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::d1(data.len()), data)), alive: true }
             }
         }
     }
@@ -1074,14 +1138,14 @@ impl PyArray {
                 for start in row_starts {
                     result.extend_from_slice(&a.as_slice()[start..start + row_size]);
                 }
-                PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::new(result_dims), result)) }
+                PyArray { inner: ArrayData::Float(NdArray::from_vec(Shape::new(result_dims), result)), alive: true }
             }
             ArrayData::Int(a) => {
                 let mut result = Vec::new();
                 for start in row_starts {
                     result.extend_from_slice(&a.as_slice()[start..start + row_size]);
                 }
-                PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::new(result_dims), result)) }
+                PyArray { inner: ArrayData::Int(NdArray::from_vec(Shape::new(result_dims), result)), alive: true }
             }
         }
     }

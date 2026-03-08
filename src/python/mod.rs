@@ -200,9 +200,11 @@ impl ArrayLike {
 #[derive(Clone)]
 pub struct PyArray {
     pub inner: ArrayData,
+    pub alive: bool,
 }
 
 impl PyArray {
+
     pub fn as_float(&self) -> PyResult<&NdArray<f64>> {
         match &self.inner {
             ArrayData::Float(a) => Ok(a),
@@ -220,6 +222,17 @@ impl PyArray {
             )),
         }
     }
+}
+
+// macro for handling dead array case
+macro_rules! check_alive {
+    ($self:expr) => {
+        if !$self.alive {
+            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "Array consumed by tree, use tree.data to access the data"
+            ));
+        }
+    };
 }
 
 pub mod array;
