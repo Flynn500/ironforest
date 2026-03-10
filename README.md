@@ -44,7 +44,6 @@ You can also build with `maturin build --release` assuming maturin is installed.
 The main things I need to finish before 1.0 are improving compatibility with the wider python ecosystem and improving the robustness of my algorithms. Main goals are:
 - Adding buffer protocols
 - Integration with pandas and polars
-- Fixing a few known bugs
 - Spatial & RPForest objects
 
 **Known Issues**

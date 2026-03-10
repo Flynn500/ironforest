@@ -17,8 +17,8 @@
 - Serialization for spatial trees
 - aNN methods for KD, Ball & RP trees
 - Reshape & linspace methods for arrays
-- Standard \__init\__ methods for spatial trees that take an ArrayLike input
-- \__array\__ protocol for numpy conversion 
+- Standard \__init\_\_ methods for spatial trees that take an ArrayLike input
+- \_\_array\_\_ protocol for numpy conversion 
 
 ### Changed
 - kNN & radius spatial queries now return a spatial result object

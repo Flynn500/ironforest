@@ -9,7 +9,7 @@ TREES = {
     "BallTree":   lambda d, ls: spatial.BallTree.from_array(d, leaf_size=ls),
     #"MTree":   lambda d, ls: spatial.MTree.from_array(d, capacity=ls),
     "VPTree":   lambda d, ls: spatial.VPTree.from_array(d, leaf_size=ls, selection="first"),
-    #"RPTree":   lambda d, ls: spatial.RPTree.from_array(d, leaf_size=ls),
+    "RPTree":   lambda d, ls: spatial.RPTree.from_array(d, leaf_size=ls),
 }
 
 LEAF_SIZE  = 20

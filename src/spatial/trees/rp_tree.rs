@@ -1,7 +1,7 @@
 use std::collections::BinaryHeap;
 
 use crate::{Generator, array::{NdArray, Shape}, projection::{ProjectionType, RandomProjection, random_projection::ProjectionDirection}, spatial::{HeapItem, common::DistanceMetric}};
-use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery, AnnQuery};
+use crate::spatial::queries::{KnnQuery, RadiusQuery, AnnQuery};
 use crate::spatial::SpatialTree;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -127,15 +127,7 @@ impl RPTree {
         query: &[f64],
         heap: &mut BinaryHeap<HeapItem>,
         k: usize,
-        accumulated_dist_sq: f64,
     ) {
-        if heap.len() == k {
-            let worst = heap.peek().unwrap().distance;
-            if accumulated_dist_sq > worst * worst {
-                return;
-            }
-        }
-
         let node = &self.nodes[node_idx];
 
         if node.left.is_none() {
@@ -153,8 +145,13 @@ impl RPTree {
 
         let (first, second, margin) = self.node_projection(node_idx, query);
 
-        self.knn_recursive_inner(first, query, heap, k, accumulated_dist_sq);
-        self.knn_recursive_inner(second, query, heap, k, accumulated_dist_sq + margin * margin);
+        self.knn_recursive_inner(first, query, heap, k);
+
+        let dominated = heap.len() == k
+            && margin >= heap.peek().unwrap().distance;
+        if !dominated {
+            self.knn_recursive_inner(second, query, heap, k);
+        }
     }
 
     fn ann_candidates_inner(
@@ -175,7 +172,7 @@ impl RPTree {
                     break;
                 }
             }
-            
+
             let node = &self.nodes[node_idx];
 
             if node.left.is_none() {
@@ -192,9 +189,9 @@ impl RPTree {
                     break;
                 }
             } else {
-                let (first, second, margin) = self.node_projection(node_idx, query);
+                let (first, second, margin_sq) = self.node_projection(node_idx, query);
                 queue.push(std::cmp::Reverse(HeapItem { distance: 0.0, index: first }));
-                queue.push(std::cmp::Reverse(HeapItem { distance: margin, index: second }));
+                queue.push(std::cmp::Reverse(HeapItem { distance: margin_sq, index: second }));
             }
         }
 
@@ -249,12 +246,7 @@ impl RPTree {
         query: &[f64],
         radius: f64,
         results: &mut Vec<(usize, f64)>,
-        accumulated_dist_sq: f64,
     ) {
-        if accumulated_dist_sq > radius * radius {
-            return;
-        }
-
         let node = &self.nodes[node_idx];
 
         if node.left.is_none() {
@@ -267,17 +259,13 @@ impl RPTree {
             return;
         }
 
-        let proj = node.direction.project(query);
-        let margin = (proj - node.split).abs();
+        let (first, second, margin_sq) = self.node_projection(node_idx, query);
 
-        let (first, second) = if proj <= node.split {
-            (node.left.unwrap(), node.right.unwrap())
-        } else {
-            (node.right.unwrap(), node.left.unwrap())
-        };
+        self.radius_recursive_inner(first, query, radius, results);
 
-        self.radius_recursive_inner(first, query, radius, results, accumulated_dist_sq);
-        self.radius_recursive_inner(second, query, radius, results, accumulated_dist_sq + margin * margin);
+        if margin_sq <= radius {
+            self.radius_recursive_inner(second, query, radius, results);
+        }
     }
 }
 
@@ -313,24 +301,20 @@ impl SpatialTree for RPTree {
         let proj = node.direction.project(query);
         let dist = (proj - node.split).abs();
         let (first, second) = if proj <= node.split { (l, r) } else { (r, l) };
-        (first, second, dist)
+        (first, second, dist*dist)
     }
 }
 
 impl KnnQuery for RPTree {
     fn query_knn_recursive(&self, node_idx: usize, query: &[f64], heap: &mut BinaryHeap<HeapItem>, k: usize) {
-        self.knn_recursive_inner(node_idx, query, heap, k, 0.0)
+        self.knn_recursive_inner(node_idx, query, heap, k)
     }
 }
 
 impl RadiusQuery for RPTree{
     fn query_radius_recursive(&self, node_idx: usize, query: &[f64], radius: f64, results: &mut Vec<(usize, f64)>) {
-        self.radius_recursive_inner(node_idx, query, radius, results, 0.0);
+        self.radius_recursive_inner(node_idx, query, radius, results);
     }
-}
-
-impl KdeQuery for RPTree{
-
 }
 
 impl AnnQuery for RPTree {
