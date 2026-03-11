@@ -13,7 +13,6 @@ readme = "README.md"
 features = ["pyo3/extension-module", "pyo3/multiple-pymethods"]
 include = [
     "py/ironforest/_core.pyi",
-    "py/ironforest/__init__.pyi",
     "py/ironforest/py.typed"
 ]
 module-name = "ironforest._core"

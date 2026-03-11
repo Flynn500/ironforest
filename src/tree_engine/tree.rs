@@ -1,5 +1,5 @@
 use crate::tree_engine::config::TaskType;
-use crate::tree_engine::node::{Node, NodeId};
+use crate::tree_engine::node::{Node, NodeId, SplitType};
 use crate::tree_engine::scoring;
 
 #[derive(Debug, Clone)]
@@ -37,16 +37,16 @@ impl Tree {
         loop {
             match &self.nodes[current.0] {
                 Node::Internal {
-                    feature,
+                    split,
                     threshold,
                     left,
                     right,
                 } => {
-                    current = if sample[*feature] <= *threshold {
-                        *left
-                    } else {
-                        *right
+                    let val = match split {
+                        SplitType::Feature(f) => sample[*f],
+                        SplitType::Projection(dir) => dir.project(sample),
                     };
+                    current = if val <= *threshold { *left } else { *right };
                     depth += 1;
                 }
                 Node::Leaf { value, n_samples } => {

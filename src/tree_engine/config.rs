@@ -1,3 +1,5 @@
+use crate::{projection::ProjectionType, tree_engine::node::SplitType};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskType {
     Classification,
@@ -11,6 +13,7 @@ pub enum SplitCriterion {
     Entropy,
     Mse,
     Random,
+    RandomProjection,
 }
 
 #[derive(Debug, Clone)]
@@ -23,6 +26,7 @@ pub struct TreeConfig {
     pub task_type: TaskType,
     pub n_classes: usize,
     pub seed: u64,
+    pub projection_type: Option<ProjectionType>,
 }
 
 impl Default for TreeConfig {
@@ -35,7 +39,9 @@ impl Default for TreeConfig {
             criterion: SplitCriterion::Gini,
             task_type: TaskType::Classification,
             n_classes: 2,
-            seed: 42,
+            seed: 0,
+            projection_type: None,
+
         }
     }
 }
@@ -83,7 +89,7 @@ impl TreeConfig {
 
 #[derive(Debug, Clone)]
 pub struct SplitResult {
-    pub feature: usize,
+    pub split_type: SplitType,
     pub threshold: f64,
     pub gain: f64,
     pub left_indices: Vec<usize>,

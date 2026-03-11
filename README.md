@@ -46,10 +46,7 @@ The main things I need to finish before 1.0 are improving compatibility with the
 - Integration with pandas and polars
 - Spatial & RPForest objects
 
-**Known Issues**
-- RPTree has an issue with exact kNN in low dimensions. The RPTree should not really be used in these situations anyway but it is something to be aware of.
-
-I'd also like to highlight the fact that before 1.0, serialization will not be gauranteed across versions. This is because the underlying trees are still going through a fair amount of iteration as we are still in the early stages of this library. After 1.0 we will ensure backwards compatiability but prior to then it is not gauranteed.  
+I'd also like to highlight the fact that before 1.0, serialization will not be gauranteed across versions. This is because the underlying trees are still going through a fair amount of iteration as we are still in the early stages of this library. 
 
 ## Spatial
 Spatial trees support kNN, radius, and KDE queries. All spatial trees support serialization via `save()` & `load()`, alternatively you can use pickle.

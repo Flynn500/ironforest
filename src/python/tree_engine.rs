@@ -1,11 +1,8 @@
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
-use crate::tree_engine::{
-    config::{TaskType as RustTaskType, SplitCriterion as RustSplitCriterion, TreeConfig as RustTreeConfig},
-    tree::Tree as RustTree,
-    ensemble::{Ensemble as RustEnsemble, EnsembleConfig as RustEnsembleConfig},
-    builder::TreeBuilder,
-};
+use crate::{projection::ProjectionType, tree_engine::{
+    builder::TreeBuilder, config::{SplitCriterion as RustSplitCriterion, TaskType as RustTaskType, TreeConfig as RustTreeConfig}, ensemble::{Ensemble as RustEnsemble, EnsembleConfig as RustEnsembleConfig}, tree::Tree as RustTree
+}};
 use super::ArrayLike;
 use numpy::{PyArray1, IntoPyArray};
 
@@ -69,12 +66,19 @@ impl PySplitCriterion {
         PySplitCriterion { inner: RustSplitCriterion::Random }
     }
 
+    #[staticmethod]
+    fn random_projection() -> Self {
+        PySplitCriterion { inner: RustSplitCriterion::RandomProjection }
+    }
+
+
     fn __repr__(&self) -> String {
         match self.inner {
             RustSplitCriterion::Gini => "SplitCriterion.GINI".to_string(),
             RustSplitCriterion::Entropy => "SplitCriterion.ENTROPY".to_string(),
             RustSplitCriterion::Mse => "SplitCriterion.MSE".to_string(),
             RustSplitCriterion::Random => "SplitCriterion.RANDOM".to_string(),
+            RustSplitCriterion::RandomProjection => "SplitCriterion.RANDOM_PROJECTION".to_string(),
         }
     }
 }
@@ -96,7 +100,9 @@ impl PyTreeConfig {
         min_samples_leaf=1,
         max_features=None,
         criterion=None,
-        seed=42
+        seed=0,
+        projection_type=None,
+        projection_density=None,
     ))]
     fn new(
         task_type: PyTaskType,
@@ -107,6 +113,8 @@ impl PyTreeConfig {
         max_features: Option<usize>,
         criterion: Option<PySplitCriterion>,
         seed: u64,
+        projection_type: Option<String>,
+        projection_density: Option<f64>,
     ) -> Self {
         let criterion = criterion.map(|c| c.inner).unwrap_or_else(|| {
             match task_type.inner {
@@ -115,6 +123,15 @@ impl PyTreeConfig {
                 RustTaskType::AnomalyDetection => RustSplitCriterion::Random,
             }
         });
+
+        let projection_type = if criterion == RustSplitCriterion::RandomProjection {
+            Some(match projection_type.as_deref().unwrap_or("gaussian") {
+                "sparse" => ProjectionType::Sparse(projection_density.unwrap_or(0.3)),
+                _ => ProjectionType::Gaussian,
+            })
+        } else {
+            None
+        };
 
         PyTreeConfig {
             inner: RustTreeConfig {
@@ -126,6 +143,7 @@ impl PyTreeConfig {
                 task_type: task_type.inner,
                 n_classes,
                 seed,
+                projection_type,
             }
         }
     }

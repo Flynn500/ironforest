@@ -27,8 +27,10 @@ class RandomForestClassifier:
         min_samples_split: int = 2,
         min_samples_leaf: int = 1,
         max_features: Optional[int] = None,
-        criterion: Literal["gini", "entropy"] = "gini",
-        random_state: int = 42,
+        criterion: Literal["gini", "entropy", "random_projection"] = "gini",
+        projection_type: Literal["gaussian", "sparse"] = "gaussian",
+        projection_density: float,
+        random_state: int = 0,
     ):
         """
         Args:
@@ -46,6 +48,8 @@ class RandomForestClassifier:
         self.min_samples_leaf = min_samples_leaf
         self.max_features = max_features
         self.criterion = criterion
+        self.projection_type = projection_type
+        self.projection_density = projection_density
         self.random_state = random_state
         self.ensemble_ = None
         self.n_classes_ = None
@@ -83,6 +87,7 @@ class RandomForestClassifier:
         criterion_map = {
             "gini": SplitCriterion.gini(),
             "entropy": SplitCriterion.entropy(),
+            "random_projection": SplitCriterion.random_projection(),
         }
 
         tree_config = TreeConfig(
@@ -94,6 +99,8 @@ class RandomForestClassifier:
             max_features=self.max_features,
             criterion=criterion_map[self.criterion],
             seed=self.random_state,
+            projection_type=self.projection_type,
+            projection_density=self.projection_density,
         )
 
         config = EnsembleConfig(
@@ -150,6 +157,9 @@ class RandomForestRegressor:
         min_samples_split: int = 2,
         min_samples_leaf: int = 1,
         max_features: Optional[int] = None,
+        criterion: Literal["mse", "random_projection"] = "mse",
+        projection_type: Literal["gaussian", "sparse"] = "gaussian",
+        projection_density: float | None = None,
         random_state: int = 42,
     ):
         """
@@ -159,6 +169,7 @@ class RandomForestRegressor:
             min_samples_split: Minimum samples required to split a node.
             min_samples_leaf: Minimum samples required at a leaf node.
             max_features: Features to consider per split. None uses n_features/3.
+            criterion: Split quality measure, "mse" or "random_projection".
             random_state: Controls randomness of bootstrapping and tree construction.
         """
         self.n_estimators = n_estimators
@@ -166,6 +177,9 @@ class RandomForestRegressor:
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
         self.max_features = max_features
+        self.criterion = criterion
+        self.projection_type = projection_type
+        self.projection_density = projection_density
         self.random_state = random_state
         self.ensemble_ = None
         self.n_features_ = None
@@ -198,6 +212,11 @@ class RandomForestRegressor:
 
         self.n_features_ = n_features
 
+        criterion_map = {
+            "mse": SplitCriterion.mse(),
+            "random_projection": SplitCriterion.random_projection(),
+        }
+
         tree_config = TreeConfig(
             task_type=TaskType.regression(),
             n_classes=0,
@@ -205,8 +224,10 @@ class RandomForestRegressor:
             min_samples_split=self.min_samples_split,
             min_samples_leaf=self.min_samples_leaf,
             max_features=self.max_features,
-            criterion=SplitCriterion.mse(),
+            criterion=criterion_map[self.criterion],
             seed=self.random_state,
+            projection_type=self.projection_type,
+            projection_density=self.projection_density,
         )
 
         config = EnsembleConfig(

@@ -37,6 +37,9 @@ class SplitCriterion:
     @staticmethod
     def random() -> SplitCriterion: ...
 
+    @staticmethod
+    def random_projection() -> SplitCriterion: ...
+    
     def __repr__(self) -> str: ...
 
 
@@ -53,6 +56,8 @@ class TreeConfig:
         max_features: Optional[int] = None,
         criterion: Optional[SplitCriterion] = None,
         seed: int = 42,
+        projection_type = None,
+        projection_density = None,
     ) -> None: ...
 
     @staticmethod

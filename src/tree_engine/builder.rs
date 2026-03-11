@@ -1,6 +1,7 @@
+use crate::projection::{ProjectionType, RandomProjection};
 use crate::tree_engine::config::{SplitCriterion, SplitResult, TaskType, TreeConfig};
 use crate::tree_engine::impurity;
-use crate::tree_engine::node::Node;
+use crate::tree_engine::node::{Node, SplitType};
 use crate::tree_engine::tree::Tree;
 use crate::random::generator::Generator;
 
@@ -71,6 +72,7 @@ impl<'a> TreeBuilder<'a> {
 
         let split = match self.config.criterion {
             SplitCriterion::Random => self.find_random_split(indices),
+            SplitCriterion::RandomProjection => self.find_spatial_split(indices),
             _ => self.find_best_split(indices),
         };
 
@@ -94,7 +96,7 @@ impl<'a> TreeBuilder<'a> {
         let right_id = self.build_node(tree, &split.right_indices, depth + 1);
 
         tree.nodes[node_id.0] = Node::Internal {
-            feature: split.feature,
+            split: split.split_type,
             threshold: split.threshold,
             left: left_id,
             right: right_id,
@@ -178,7 +180,7 @@ impl<'a> TreeBuilder<'a> {
             }
 
             return Some(SplitResult {
-                feature: f,
+                split_type: SplitType::Feature(f),
                 threshold,
                 gain: f64::NAN,
                 left_indices: left,
@@ -211,7 +213,7 @@ impl<'a> TreeBuilder<'a> {
             let (left, right): (Vec<usize>, Vec<usize>) =
                 indices.iter().partition(|&&i| self.feature_val(i, b.feature) <= b.threshold);
             SplitResult {
-                feature: b.feature,
+                split_type: SplitType::Feature(b.feature),
                 threshold: b.threshold,
                 gain: b.gain,
                 left_indices: left,
@@ -247,6 +249,59 @@ impl<'a> TreeBuilder<'a> {
             }
             _ => None,
         }
+    }
+
+    fn find_spatial_split(&mut self, indices: &[usize]) -> Option<SplitResult> {
+        if indices.len() < 2 {
+            return None;
+        }
+
+        let projection_type = self.config.projection_type.unwrap_or(ProjectionType::Gaussian);
+        let direction = RandomProjection::generate_direction(
+            self.n_features,
+            projection_type,
+            &mut self.rng,
+        );
+
+        let mut projected: Vec<(f64, usize)> = indices
+            .iter()
+            .map(|&i| {
+                let row = &self.data[i * self.n_features..(i + 1) * self.n_features];
+                (direction.project(row), i)
+            })
+            .collect();
+
+        projected.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        let sorted_indices: Vec<usize> = projected.iter().map(|&(_, i)| i).collect();
+        let sorted_projections: Vec<f64> = projected.iter().map(|&(p, _)| p).collect();
+
+        let parent_impurity = self.node_impurity(indices);
+        let best = self.sweep_projected(
+            &sorted_indices,
+            &sorted_projections,
+            parent_impurity,
+        )?;
+
+        let threshold = best.threshold;
+        let (left, right): (Vec<usize>, Vec<usize>) = indices
+            .iter()
+            .partition(|&&i| {
+                let row = &self.data[i * self.n_features..(i + 1) * self.n_features];
+                direction.project(row) <= threshold
+            });
+
+        if left.is_empty() || right.is_empty() {
+            return None;
+        }
+
+        Some(SplitResult {
+            split_type: SplitType::Projection(direction),
+            threshold,
+            gain: best.gain,
+            left_indices: left,
+            right_indices: right,
+        })
     }
 
     fn sweep_classification(
@@ -372,6 +427,142 @@ impl<'a> TreeBuilder<'a> {
         best
     }
 
+    fn sweep_projected(
+        &self,
+        sorted_indices: &[usize],
+        projections: &[f64],
+        parent_impurity: f64,
+    ) -> Option<SplitCandidate> {
+        match self.config.task_type {
+            TaskType::Classification => {
+                self.sweep_projected_classification(sorted_indices, projections, parent_impurity)
+            }
+            TaskType::Regression => {
+                self.sweep_projected_regression(sorted_indices, projections, parent_impurity)
+            }
+            _ => None,
+        }
+    }
+
+    fn sweep_projected_classification(
+        &self,
+        sorted_indices: &[usize],
+        projections: &[f64],
+        parent_impurity: f64,
+    ) -> Option<SplitCandidate> {
+        let nc = self.config.n_classes;
+        let n = sorted_indices.len();
+
+        let mut left_counts = vec![0usize; nc];
+        let mut right_counts = vec![0usize; nc];
+        for &i in sorted_indices {
+            let c = self.labels[i] as usize;
+            right_counts[c] += 1;
+        }
+
+        let mut best: Option<SplitCandidate> = None;
+
+        for pos in 0..n - 1 {
+            let c = self.labels[sorted_indices[pos]] as usize;
+            left_counts[c] += 1;
+            right_counts[c] -= 1;
+
+            let n_left = pos + 1;
+            let n_right = n - n_left;
+
+            if (projections[pos + 1] - projections[pos]).abs() < 1e-12 {
+                continue;
+            }
+
+            if n_left < self.config.min_samples_leaf
+                || n_right < self.config.min_samples_leaf
+            {
+                continue;
+            }
+
+            let imp_left = self.impurity_from_counts(&left_counts);
+            let imp_right = self.impurity_from_counts(&right_counts);
+            let weighted = impurity::weighted_impurity(n_left, imp_left, n_right, imp_right);
+            let gain = parent_impurity - weighted;
+
+            let dominated = best.as_ref().map_or(true, |b| gain > b.gain);
+            if dominated && gain > 0.0 {
+                best = Some(SplitCandidate {
+                    feature: 0, // unused for spatial splits
+                    threshold: (projections[pos] + projections[pos + 1]) / 2.0,
+                    gain,
+                });
+            }
+        }
+
+        best
+    }
+
+    fn sweep_projected_regression(
+        &self,
+        sorted_indices: &[usize],
+        projections: &[f64],
+        parent_impurity: f64,
+    ) -> Option<SplitCandidate> {
+        let n = sorted_indices.len();
+
+        let mut total_sum = 0.0_f64;
+        let mut total_sum_sq = 0.0_f64;
+        for &i in sorted_indices {
+            let y = self.labels[i];
+            total_sum += y;
+            total_sum_sq += y * y;
+        }
+
+        let mut left_sum = 0.0_f64;
+        let mut left_sum_sq = 0.0_f64;
+        let mut best: Option<SplitCandidate> = None;
+
+        for pos in 0..n - 1 {
+            let y = self.labels[sorted_indices[pos]];
+            left_sum += y;
+            left_sum_sq += y * y;
+
+            let n_left = (pos + 1) as f64;
+            let n_right = (n - pos - 1) as f64;
+
+            if (projections[pos + 1] - projections[pos]).abs() < 1e-12 {
+                continue;
+            }
+
+            if (pos + 1) < self.config.min_samples_leaf
+                || (n - pos - 1) < self.config.min_samples_leaf
+            {
+                continue;
+            }
+
+            let right_sum = total_sum - left_sum;
+            let right_sum_sq = total_sum_sq - left_sum_sq;
+
+            let mse_left = (left_sum_sq / n_left) - (left_sum / n_left).powi(2);
+            let mse_right = (right_sum_sq / n_right) - (right_sum / n_right).powi(2);
+
+            let weighted = impurity::weighted_impurity(
+                pos + 1,
+                mse_left.max(0.0),
+                n - pos - 1,
+                mse_right.max(0.0),
+            );
+            let gain = parent_impurity - weighted;
+
+            let dominated = best.as_ref().map_or(true, |b| gain > b.gain);
+            if dominated && gain > 0.0 {
+                best = Some(SplitCandidate {
+                    feature: 0,
+                    threshold: (projections[pos] + projections[pos + 1]) / 2.0,
+                    gain,
+                });
+            }
+        }
+
+        best
+    }
+
     fn node_impurity(&self, indices: &[usize]) -> f64 {
         match self.config.task_type {
             TaskType::Classification => {
@@ -388,9 +579,8 @@ impl<'a> TreeBuilder<'a> {
 
     fn impurity_from_counts(&self, counts: &[usize]) -> f64 {
         match self.config.criterion {
-            SplitCriterion::Gini => impurity::gini(counts),
             SplitCriterion::Entropy => impurity::entropy(counts),
-            _ => 0.0,
+            _ => impurity::gini(counts),
         }
     }
 
