@@ -1,3 +1,12 @@
+## 0.6
+
+### Added
+
+### Changed
+- Zero copy interop with numpy
+
+### Fixed
+
 ## 0.5.2
 
 ### Added

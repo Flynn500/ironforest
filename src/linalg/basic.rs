@@ -72,7 +72,7 @@ impl<T: Copy> NdArray<T> {
     }
 
     pub fn ravel(&self) -> Self {
-        NdArray::from_vec(Shape::d1(self.len()), self.as_slice().to_vec())
+        NdArray::from_vec(Shape::d1(self.len()), self.to_contiguous().as_slice_unchecked().to_vec())
     }
 }
 
@@ -109,8 +109,10 @@ impl NdArray<f64> {
         let n = b.len();
         let mut data = Vec::with_capacity(m * n);
 
-        for &ai in a.as_slice() {
-            for &bi in b.as_slice() {
+        let a_data = a.as_contiguous_slice();
+        let b_data = b.as_contiguous_slice();
+        for &ai in a_data.iter() {
+            for &bi in b_data.iter() {
                 data.push(ai * bi);
             }
         }
@@ -122,10 +124,9 @@ impl NdArray<f64> {
         match (self.ndim(), other.ndim()) {
             (1, 1) => {
                 assert_eq!(self.len(), other.len(), "Vectors must have same length");
-                let sum: f64 = self.as_slice().iter()
-                    .zip(other.as_slice().iter())
-                    .map(|(&a, &b)| a * b)
-                    .sum();
+                let a = self.as_contiguous_slice();
+                let b = other.as_contiguous_slice();
+                let sum = simd_dot(&a, &b);
                 NdArray::from_vec(Shape::d1(1), vec![sum])
             }
             (2, 1) => {
@@ -133,8 +134,8 @@ impl NdArray<f64> {
                 assert_eq!(k, other.len(), "Inner dimensions must match");
                 let mut data = Vec::with_capacity(n);
                 for i in 0..n {
-                    let row = &self.as_slice()[i * k..(i + 1) * k];
-                    let sum = simd_dot(row, other.as_slice());
+                    let row = self.row_cow(i);
+                    let sum = simd_dot(row.as_ref(), other.as_slice_unchecked());
                     data.push(sum);
                 }
                 NdArray::from_vec(Shape::d1(n), data)

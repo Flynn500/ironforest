@@ -81,7 +81,7 @@ impl RandomProjection {
         match projection_type {
             ProjectionType::Gaussian => {
                 let raw = rng.standard_normal(Shape::d1(dim));
-                let slice = raw.as_slice();
+                let slice = raw.as_slice_unchecked();
                 let norm: f64 = slice.iter().map(|x| x * x).sum::<f64>().sqrt();
                 ProjectionDirection::Dense(slice.iter().map(|x| x / norm).collect())
             }
@@ -136,7 +136,7 @@ impl RandomProjection {
 
         let col = NdArray::from_vec(Shape::new(vec![dim, 1]), vector.to_vec());
         let result = data.dot(&col);
-        result.as_slice().to_vec()
+        result.as_slice_unchecked().to_vec()
     }
 
     pub fn rp_split(

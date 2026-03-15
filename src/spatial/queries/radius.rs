@@ -8,7 +8,7 @@ pub trait RadiusQuery: SpatialTree {
     fn query_radius(&self, query: &[f64], radius: f64) -> Vec<(usize, f64)> {
         let mut results = Vec::new();
         let rad = match Self::REDUCED {
-            true => self.metric().pre_transform_radius(radius),
+            true => self.metric().to_reduced(radius),
             false => radius,
         };
         self.query_radius_recursive(self.root(), query, rad, &mut results);
@@ -58,7 +58,7 @@ pub trait RadiusQuery: SpatialTree {
     fn seq_radius_batch(&self, queries: &NdArray<f64>, n_queries: usize, dim: usize, radius: f64) -> Vec<Vec<(usize, f64)>> {
         (0..n_queries)
             .map(|i| {
-                let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
                 self.query_radius(query, radius)
             })
             .collect()
@@ -68,7 +68,7 @@ pub trait RadiusQuery: SpatialTree {
         (0..n_queries)
             .into_par_iter()
             .map(|i| {
-                let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
                 self.query_radius(query, radius)
             })
             .collect()

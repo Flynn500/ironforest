@@ -4,6 +4,8 @@ from typing import Optional, Literal, List, Tuple, overload
 from ironforest._core import Array, ArrayLike
 
 
+#Maybe these should carry views of the initial distance array. Will have to actually add views though...
+#Would be more performant, instead of creating like 500 ndarrays for a big query, only one.
 class SpatialResult:
     """Result of a spatial query (knn or radius search).
 

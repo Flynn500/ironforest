@@ -1,62 +1,186 @@
-use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use pyo3::{Py, PyAny};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Storage<T> {
-    data: Vec<T>,
+pub enum Storage<T> {
+    Owned(Vec<T>),
+
+    External {
+        owner: Py<PyAny>,
+        ptr: *const T,
+        len: usize,
+    },
+
+    Strided {
+        base: Arc<[T]>,
+        offset: usize,
+        len: usize,
+    },
 }
+
+unsafe impl<T: Send> Send for Storage<T> {}
+unsafe impl<T: Sync> Sync for Storage<T> {}
 
 impl<T> Storage<T> {
     pub fn from_vec(data: Vec<T>) -> Self {
-        Storage { data }
+        Storage::Owned(data)
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        Storage {
-            data: Vec::with_capacity(capacity),
-        }
+        Storage::Owned(Vec::with_capacity(capacity))
     }
 
     pub fn into_vec(self) -> Vec<T> {
-        self.data
+        match self {
+            Storage::Owned(v) => v,
+            Storage::External { .. } => {
+                panic!("into_vec() called on read-only External storage; \
+                        clone the NdArray first to get an Owned copy")
+            }
+            Storage::Strided { .. } => {
+                panic!("into_vec() called on Strided storage; \
+                        call to_contiguous() on the NdArray first")
+            }
+        }
     }
 
     pub fn len(&self) -> usize {
-        self.data.len()
+        match self {
+            Storage::Owned(v) => v.len(),
+            Storage::External { len, .. } => *len,
+            Storage::Strided { len, .. } => *len,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
+        self.len() == 0
     }
 
-    pub fn as_slice(&self) -> &[T] {
-        &self.data
+    pub fn is_contiguous(&self) -> bool {
+        !matches!(self, Storage::Strided { .. })
     }
 
-    pub fn as_mut_slice(&mut self) -> &mut [T] {
-        &mut self.data
+    pub fn is_owned(&self) -> bool {
+        matches!(self, Storage::Owned(_))
+    }
+
+    pub fn as_slice(&self) -> Option<&[T]> {
+        match self {
+            Storage::Owned(v) => Some(v.as_slice()),
+            Storage::External { ptr, len, .. } => Some(unsafe {
+                std::slice::from_raw_parts(*ptr, *len)
+            }),
+            Storage::Strided { .. } => None,
+        }
+    }
+
+    #[inline]
+    pub fn as_slice_unchecked(&self) -> &[T] {
+        self.as_slice()
+            .expect("as_slice_unchecked() called on Strided storage; call to_contiguous() first")
+    }
+
+    pub fn as_mut_slice(&mut self) -> Option<&mut [T]> {
+        match self {
+            Storage::Owned(v) => Some(v.as_mut_slice()),
+            Storage::External { .. } | Storage::Strided { .. } => None,
+        }
     }
 
     pub fn get(&self, index: usize) -> Option<&T> {
-        self.data.get(index)
+        match self {
+            Storage::Owned(v) => v.get(index),
+            Storage::External { ptr, len, .. } => {
+                if index < *len {
+                    Some(unsafe { &*ptr.add(index) })
+                } else {
+                    None
+                }
+            }
+            Storage::Strided { base, offset, len } => {
+                let actual = offset + index;
+                if index < *len && actual < base.len() {
+                    Some(&base[actual])
+                } else {
+                    None
+                }
+            }
+        }
     }
 
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        self.data.get_mut(index)
+        match self {
+            Storage::Owned(v) => v.get_mut(index),
+            Storage::External { .. } => None,
+            Storage::Strided { .. } => None,
+        }
     }
 }
 
 impl<T: Clone> Storage<T> {
     pub fn filled(value: T, len: usize) -> Self {
-        Storage {
-            data: vec![value; len],
+        Storage::Owned(vec![value; len])
+    }
+
+    pub fn to_owned_vec(&self) -> Vec<T> {
+        match self {
+            Storage::Owned(v) => v.clone(),
+            Storage::External { ptr, len, .. } => unsafe {
+                std::slice::from_raw_parts(*ptr, *len).to_vec()
+            },
+            Storage::Strided { base, offset, len } => {
+                base[*offset..*offset + *len].to_vec()
+            }
         }
     }
 }
 
 impl<T: Default + Clone> Storage<T> {
     pub fn zeros(len: usize) -> Self {
-        Storage {
-            data: vec![T::default(); len],
+        Storage::Owned(vec![T::default(); len])
+    }
+}
+
+
+impl<T: std::fmt::Debug> std::fmt::Debug for Storage<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Storage::Owned(v) => f.debug_tuple("Owned").field(v).finish(),
+            Storage::External { len, .. } => {
+                f.debug_struct("External").field("len", len).finish()
+            }
+            Storage::Strided { offset, len, .. } => f
+                .debug_struct("Strided")
+                .field("offset", offset)
+                .field("len", len)
+                .finish(),
         }
+    }
+}
+
+impl<T: Clone> Clone for Storage<T> {
+    fn clone(&self) -> Self {
+        Storage::Owned(self.to_owned_vec())
+    }
+}
+
+impl<T: Serialize> Serialize for Storage<T> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Storage::Owned(v) => v.serialize(serializer),
+            Storage::External { .. } | Storage::Strided { .. } => Err(
+                serde::ser::Error::custom(
+                    "cannot serialise External or Strided storage; \
+                     call to_contiguous() or clone the NdArray first",
+                ),
+            ),
+        }
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Storage<T> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let v = Vec::<T>::deserialize(deserializer)?;
+        Ok(Storage::Owned(v))
     }
 }

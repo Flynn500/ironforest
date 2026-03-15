@@ -30,6 +30,7 @@ pub struct RPTree {
     pub metric: DistanceMetric,
     pub projection_type: ProjectionType,
     rng: Generator,
+    pub data_is_reordered: bool,
 }
 
 impl RPTree {
@@ -47,6 +48,9 @@ impl RPTree {
 
         let rng = Generator::from_seed(seed);
 
+        if matches!(metric, DistanceMetric::Cosine) && !data.is_owned() {
+            data = data.to_contiguous();
+        }
         if matches!(metric, DistanceMetric::Cosine) {
             for i in 0..n_points {
                 let normed = metric.pre_transform(data.row(i)).into_owned();
@@ -54,20 +58,25 @@ impl RPTree {
             }
         }
 
+        let will_reorder = data.is_owned();
         let mut tree = RPTree {
             nodes: Vec::new(),
             indices: (0..n_points).collect(),
-            data: data,
+            data,
             n_points,
             dim,
             leaf_size,
             metric,
             projection_type,
             rng,
+            data_is_reordered: false,
         };
 
         tree.build_recursive(0, n_points);
-        tree.reorder_data();
+        if will_reorder {
+            tree.reorder_data();
+            tree.data_is_reordered = true;
+        }
         tree
     }
 
@@ -206,7 +215,7 @@ impl RPTree {
     fn seq_ann_batch(&self, queries: &NdArray<f64>, n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, f64)>> {
         (0..n_queries)
             .map(|i| {
-                let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
                 self.query_ann(query, k, n_candidates)
             })
             .collect()
@@ -216,7 +225,7 @@ impl RPTree {
         (0..n_queries)
             .into_par_iter()
             .map(|i| {
-                let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
                 self.query_ann(query, k, n_candidates)
             })
             .collect()
@@ -276,10 +285,11 @@ impl SpatialTree for RPTree {
 
     fn nodes(&self) -> &[RPNode] { &self.nodes }
     fn indices(&self) -> &[usize] { &self.indices }
-    fn data(&self) -> &[f64] { self.data.as_slice() }
+    fn data(&self) -> &[f64] { self.data.as_slice_unchecked() }
     fn dim(&self) -> usize { self.dim }
     fn metric(&self) -> &DistanceMetric { &self.metric }
     fn n_points(&self) -> usize {self.n_points}
+    fn data_is_reordered(&self) -> bool { self.data_is_reordered }
 
     fn node_start(&self, idx: usize) -> usize { self.nodes[idx].start }
     fn node_end(&self, idx: usize) -> usize { self.nodes[idx].end }

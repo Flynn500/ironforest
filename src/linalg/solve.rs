@@ -92,7 +92,7 @@ pub fn weighted_least_squares(&self, b: &NdArray<f64>, weights: &NdArray<f64>,) 
         }
         
         let m = self.shape().dims()[0];
-        let sqrt_w: Vec<f64> = weights.as_slice()
+        let sqrt_w: Vec<f64> = weights.as_slice_unchecked()
             .iter()
             .map(|&w| {
                 if w < 0.0 {

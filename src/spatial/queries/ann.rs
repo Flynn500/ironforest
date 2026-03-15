@@ -82,7 +82,7 @@ pub trait AnnQuery: SpatialTree {
     fn seq_ann_batch(&self, queries: &NdArray<f64>, n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, f64)>> {
         (0..n_queries)
             .map(|i| {
-                let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
                 self.query_ann(query, k, n_candidates)
             })
             .collect()
@@ -92,7 +92,7 @@ pub trait AnnQuery: SpatialTree {
         (0..n_queries)
             .into_par_iter()
             .map(|i| {
-                let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
                 self.query_ann(query, k, n_candidates)
             })
             .collect()

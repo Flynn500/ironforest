@@ -2,15 +2,15 @@ use crate::array::ndarray::{NdArray};
 use crate::array::shape::Shape;
 impl NdArray<f64> {
     pub fn sum(&self) -> f64 {
-        self.as_slice().iter().sum()
+        self.as_slice_unchecked().iter().sum()
     }
 
     pub fn any(&self) -> bool {
-        self.as_slice().iter().any(|&x| x != 0.0)
+        self.as_slice_unchecked().iter().any(|&x| x != 0.0)
     }
 
     pub fn all(&self) -> bool {
-        self.as_slice().iter().all(|&x| x != 0.0)
+        self.as_slice_unchecked().iter().all(|&x| x != 0.0)
     }
 
     pub fn mean(&self) -> f64 {
@@ -25,7 +25,7 @@ impl NdArray<f64> {
             return f64::NAN;
         }
         let mean = self.mean();
-        let sum_sq_dev: f64 = self.as_slice()
+        let sum_sq_dev: f64 = self.as_slice_unchecked()
             .iter()
             .map(|&x| (x - mean).powi(2))
             .sum();
@@ -40,7 +40,7 @@ impl NdArray<f64> {
         if self.is_empty() {
             return f64::NAN;
         }
-        let mut sorted = self.as_slice().to_vec();
+        let mut sorted = self.to_contiguous().as_slice_unchecked().to_vec();
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let n = sorted.len();
         if n % 2 == 1 {
@@ -55,7 +55,7 @@ impl NdArray<f64> {
         if self.is_empty() {
             return f64::NAN;
         }
-        let mut sorted = self.as_slice().to_vec();
+        let mut sorted = self.to_contiguous().as_slice_unchecked().to_vec();
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let pos = q * (sorted.len() - 1) as f64;
         let lower = pos.floor() as usize;
@@ -75,7 +75,7 @@ impl NdArray<f64> {
         if self.is_empty() {
             return NdArray::from_vec(Shape::d1(qs.len()), vec![f64::NAN; qs.len()]);
         }
-        let mut sorted = self.as_slice().to_vec();
+        let mut sorted = self.to_contiguous().as_slice_unchecked().to_vec();
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let n = sorted.len();
         let results: Vec<f64> = qs.iter().map(|&q| {
@@ -96,7 +96,7 @@ impl NdArray<f64> {
         if self.is_empty() {
             return f64::NAN;
         }
-        self.as_slice()
+        self.as_slice_unchecked()
             .iter()
             .copied()
             .fold(f64::NEG_INFINITY, f64::max)
@@ -106,7 +106,7 @@ impl NdArray<f64> {
         if self.is_empty() {
             return f64::NAN;
         }
-        self.as_slice()
+        self.as_slice_unchecked()
             .iter()
             .copied()
             .fold(f64::INFINITY, f64::min)
@@ -117,7 +117,7 @@ impl<T> NdArray<T> {
     pub fn mode(&self) -> T where T: PartialEq + Copy {
         assert!(!self.is_empty(), "mode() called on empty array");
 
-        let slice = self.as_slice();
+        let slice = self.as_slice_unchecked();
         let mut best_val = slice[0];
         let mut best_count = 0usize;
 

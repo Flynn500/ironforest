@@ -83,7 +83,7 @@ impl MTree {
         
         let mut tree = Self::new(dim, capacity, metric);
 
-        for (i, point) in array.as_slice().chunks(dim).enumerate() {
+        for (i, point) in array.as_slice_unchecked().chunks(dim).enumerate() {
             let transformed = metric.pre_transform(point);
             tree.insert(transformed.into_owned(), i);
         }
@@ -511,6 +511,9 @@ impl SpatialTree for MTree {
     fn dim(&self) -> usize { self.dim }
     fn metric(&self) -> &DistanceMetric { &self.metric }
     fn n_points(&self) -> usize {self.n_points}
+    // MTree stores points inside node entries rather than a flat data buffer,
+    // so `get_point` is never called — this value is irrelevant.
+    fn data_is_reordered(&self) -> bool { true }
 
     fn root(&self) -> usize { self.root }
 

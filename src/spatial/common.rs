@@ -34,9 +34,9 @@ impl DistanceMetric {
         }
     }
 
-    //pre transform for radius queries as caller gives distance directly
+    //gets data in reduced space - for radius currently queries as caller gives distance directly
     #[inline]
-    pub fn pre_transform_radius(self, radius: f64) -> f64 {
+    pub fn to_reduced(self, radius: f64) -> f64 {
         match self {
             DistanceMetric::Euclidean => radius * radius,
             _ => radius,

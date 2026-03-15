@@ -1,7 +1,7 @@
 """Decision Tree classifier and regressor built on tree_engine."""
 
 from typing import Optional, Literal
-from ironforest._core import Array, ndutils, Tree, TreeConfig, TaskType, SplitCriterion
+from ironforest._core import Array, ndutils, Tree, TreeConfig, TaskType, SplitCriterion, SplitGeometry
 
 
 class DecisionTreeClassifier:
@@ -15,7 +15,8 @@ class DecisionTreeClassifier:
         min_samples_split: int = 2,
         min_samples_leaf: int = 1,
         max_features: Optional[int] = None,
-        criterion: Literal["gini", "entropy", "random_projection"] = "gini",
+        criterion: Literal["gini", "entropy"] = "gini",
+        split_geometry: Literal["axis", "random_projection"] = "axis",
         projection_type: Literal["gaussian", "sparse"] = "gaussian",
         projection_density: float | None = None,
         random_state: int = 0,
@@ -25,6 +26,7 @@ class DecisionTreeClassifier:
         self.min_samples_leaf = min_samples_leaf
         self.max_features = max_features
         self.criterion = criterion
+        self.split_geometry = split_geometry
         self.projection_type = projection_type
         self.projection_density = projection_density
         self.random_state = random_state
@@ -41,7 +43,7 @@ class DecisionTreeClassifier:
             y: Array or array-like of shape (n_samples,)
                 The target values (class labels).
 
-        Returns:  
+        Returns:
             self : DecisionTreeClassifier
                 Fitted estimator.
         """
@@ -66,11 +68,13 @@ class DecisionTreeClassifier:
         self.n_classes_ = int(y.max()) + 1
         self.n_features_ = n_features
 
-        # Create config
         criterion_map = {
             "gini": SplitCriterion.gini(),
             "entropy": SplitCriterion.entropy(),
-            "random_projection": SplitCriterion.random_projection(),
+        }
+        split_geometry_map = {
+            "axis": SplitGeometry.axis(),
+            "random_projection": SplitGeometry.random_projection(),
         }
 
         config = TreeConfig(
@@ -81,6 +85,7 @@ class DecisionTreeClassifier:
             min_samples_leaf=self.min_samples_leaf,
             max_features=self.max_features,
             criterion=criterion_map[self.criterion],
+            split_geometry=split_geometry_map[self.split_geometry],
             seed=self.random_state,
             projection_type=self.projection_type,
             projection_density=self.projection_density,
@@ -141,7 +146,8 @@ class DecisionTreeRegressor:
         min_samples_split: int = 2,
         min_samples_leaf: int = 1,
         max_features: Optional[int] = None,
-        criterion: Literal["mse", "random_projection"] = "mse",
+        criterion: Literal["mse"] = "mse",
+        split_geometry: Literal["axis", "random_projection"] = "axis",
         projection_type: Literal["gaussian", "sparse"] = "gaussian",
         projection_density: float | None = None,
         random_state: int = 0,
@@ -151,6 +157,7 @@ class DecisionTreeRegressor:
         self.min_samples_leaf = min_samples_leaf
         self.max_features = max_features
         self.criterion = criterion
+        self.split_geometry = split_geometry
         self.projection_type = projection_type
         self.projection_density = projection_density
         self.random_state = random_state
@@ -189,9 +196,9 @@ class DecisionTreeRegressor:
 
         self.n_features_ = n_features
 
-        criterion_map = {
-            "mse": SplitCriterion.mse(),
-            "random_projection": SplitCriterion.random_projection(),
+        split_geometry_map = {
+            "axis": SplitGeometry.axis(),
+            "random_projection": SplitGeometry.random_projection(),
         }
 
         config = TreeConfig(
@@ -201,7 +208,8 @@ class DecisionTreeRegressor:
             min_samples_split=self.min_samples_split,
             min_samples_leaf=self.min_samples_leaf,
             max_features=self.max_features,
-            criterion=criterion_map[self.criterion],
+            criterion=SplitCriterion.mse(),
+            split_geometry=split_geometry_map[self.split_geometry],
             seed=self.random_state,
             projection_type=self.projection_type,
             projection_density=self.projection_density,

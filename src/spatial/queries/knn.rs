@@ -82,7 +82,7 @@ pub trait KnnQuery: SpatialTree {
     fn seq_knn_batch(&self, queries: &NdArray<f64>, n_queries: usize, dim: usize, k: usize) -> Vec<Vec<(usize, f64)>> {
         (0..n_queries)
             .map(|i| {
-                let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
                 self.query_knn(query, k)
             })
             .collect()
@@ -92,7 +92,7 @@ pub trait KnnQuery: SpatialTree {
         (0..n_queries)
             .into_par_iter()
             .map(|i| {
-                let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
                 self.query_knn(query, k)
             })
             .collect()

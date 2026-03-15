@@ -57,7 +57,7 @@ pub trait KdeQuery: SpatialTree {
     fn seq_kde_recursion(&self, kernel: KernelType, bandwidth: f64, queries: &NdArray<f64>, n_queries: usize, dim: usize) -> Vec<f64> {
         let mut results = vec![0.0; n_queries];
         for i in 0..n_queries {
-            let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+            let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
             self.kde_recursive(self.root(), query, bandwidth, &mut results[i], kernel);
         }
         results
@@ -67,7 +67,7 @@ pub trait KdeQuery: SpatialTree {
         (0..n_queries)
             .into_par_iter()
             .map(|i| {
-                let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
                 let mut density = 0.0;
                 self.kde_recursive(self.root(), query, bandwidth, &mut density, kernel);
                 density

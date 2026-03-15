@@ -101,19 +101,8 @@ impl Ensemble {
                 };
 
                 let sub_n = indices.len();
-                let mut sub_data = Vec::with_capacity(sub_n * n_features);
-                let mut sub_labels = Vec::with_capacity(sub_n);
-
-                for &i in &indices {
-                    let row_start = i * n_features;
-                    sub_data.extend_from_slice(&data[row_start..row_start + n_features]);
-                    if !labels.is_empty() {
-                        sub_labels.push(labels[i]);
-                    }
-                }
-
-                let mut builder = TreeBuilder::new(&tc, &sub_data, &sub_labels, sub_n, n_features);
-                let mut tree = builder.build();
+                let mut builder = TreeBuilder::new(&tc, data, labels, n_samples, n_features);
+                let mut tree = builder.build_with_indices(indices);
                 tree.n_training_samples = sub_n;
                 tree
             })

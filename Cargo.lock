@@ -56,7 +56,7 @@ dependencies = [
 
 [[package]]
 name = "ironforest"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "num-traits",
  "numpy",

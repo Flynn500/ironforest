@@ -104,8 +104,8 @@ fn linspace(_py: Python<'_>, start: ArrayLike, stop: ArrayLike, num: i64) -> PyR
 
     for j in 0..num as usize {
         for i in 0..total_elements {
-            let s = start_b.as_slice()[i];
-            let e = stop_b.as_slice()[i];
+            let s = start_b.as_slice_unchecked()[i];
+            let e = stop_b.as_slice_unchecked()[i];
             data.push(s + (e - s) * (j as f64 / steps));
         }
     }

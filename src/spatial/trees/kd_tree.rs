@@ -1,6 +1,7 @@
-use crate::{array::{NdArray, Shape}, spatial::common::DistanceMetric};
+use crate::{spatial::common::DistanceMetric};
 use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery, AnnQuery};
 use crate::spatial::SpatialTree;
+use crate::{NdArray, Shape};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -27,6 +28,10 @@ pub struct KDTree {
     pub dim: usize,
     pub leaf_size: usize,
     pub metric: DistanceMetric,
+    /// `true` after physical reorder (Owned input) — `get_point(i)` uses
+    /// `data[i]`. `false` for zero-copy (External/Strided) — `get_point(i)`
+    /// uses `data[indices[i]]` to look up the original position.
+    pub data_is_reordered: bool,
 }
 
 impl KDTree {
@@ -36,6 +41,11 @@ impl KDTree {
         let n_points = shape[0];
         let dim = shape[1];
 
+        // Cosine normalisation writes back into `data` — requires owned storage.
+        // Materialise External/Strided input up-front if needed.
+        if matches!(metric, DistanceMetric::Cosine) && !data.is_owned() {
+            data = data.to_contiguous();
+        }
         if matches!(metric, DistanceMetric::Cosine) {
             for i in 0..n_points {
                 let normed = metric.pre_transform(data.row(i)).into_owned();
@@ -43,18 +53,23 @@ impl KDTree {
             }
         }
 
+        let will_reorder = data.is_owned();
         let mut tree = KDTree {
             nodes: Vec::new(),
             indices: (0..n_points).collect(),
-            data: data,
+            data,
             n_points,
             dim,
             leaf_size,
             metric,
+            data_is_reordered: false,
         };
 
         tree.build_recursive(0, n_points);
-        tree.reorder_data();
+        if will_reorder {
+            tree.reorder_data();
+            tree.data_is_reordered = true;
+        }
         tree
     }
 
@@ -163,10 +178,11 @@ impl SpatialTree for KDTree {
 
     fn nodes(&self) -> &[KDNode] { &self.nodes }
     fn indices(&self) -> &[usize] { &self.indices }
-    fn data(&self) -> &[f64] { self.data.as_slice() }
+    fn data(&self) -> &[f64] { self.data.as_slice_unchecked() }
     fn dim(&self) -> usize { self.dim }
     fn metric(&self) -> &DistanceMetric { &self.metric }
     fn n_points(&self) -> usize {self.n_points}
+    fn data_is_reordered(&self) -> bool { self.data_is_reordered }
 
     fn node_start(&self, idx: usize) -> usize { self.nodes[idx].start }
     fn node_end(&self, idx: usize) -> usize { self.nodes[idx].end }

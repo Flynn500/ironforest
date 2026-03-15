@@ -23,6 +23,7 @@ pub struct BallTree {
     pub dim: usize,
     pub leaf_size: usize,
     pub metric: DistanceMetric,
+    pub data_is_reordered: bool,
 }
 
 impl BallTree {
@@ -32,6 +33,9 @@ impl BallTree {
         let n_points = shape[0];
         let dim = shape[1];
 
+        if matches!(metric, DistanceMetric::Cosine) && !data.is_owned() {
+            data = data.to_contiguous();
+        }
         if matches!(metric, DistanceMetric::Cosine) {
             for i in 0..n_points {
                 let normed = metric.pre_transform(data.row(i)).into_owned();
@@ -39,18 +43,23 @@ impl BallTree {
             }
         }
 
+        let will_reorder = data.is_owned();
         let mut tree = BallTree {
             nodes: Vec::new(),
             indices: (0..n_points).collect(),
-            data: data,
+            data,
             n_points,
             dim,
             leaf_size,
             metric,
+            data_is_reordered: false,
         };
 
         tree.build_recursive(0, n_points);
-        tree.reorder_data();
+        if will_reorder {
+            tree.reorder_data();
+            tree.data_is_reordered = true;
+        }
         tree
     }
 
@@ -187,10 +196,11 @@ impl SpatialTree for BallTree {
 
     fn nodes(&self) -> &[BallNode] { &self.nodes }
     fn indices(&self) -> &[usize] { &self.indices }
-    fn data(&self) -> &[f64] { self.data.as_slice() }
+    fn data(&self) -> &[f64] { self.data.as_slice_unchecked() }
     fn dim(&self) -> usize { self.dim }
     fn metric(&self) -> &DistanceMetric { &self.metric }
     fn n_points(&self) -> usize {self.n_points}
+    fn data_is_reordered(&self) -> bool { self.data_is_reordered }
 
     fn node_start(&self, idx: usize) -> usize { self.nodes[idx].start }
     fn node_end(&self, idx: usize) -> usize { self.nodes[idx].end }
@@ -201,7 +211,7 @@ impl SpatialTree for BallTree {
         let node = &self.nodes[node_idx];
         let d = self.metric.post_transform(self.metric.reduced_distance(query, &node.center));
         let min_real = (d - node.radius).max(0.0);
-        self.metric.pre_transform_radius(min_real)
+        self.metric.to_reduced(min_real)
     }
 
     fn knn_child_order(&self, node_idx: usize, query: &[f64]) -> (usize, usize) {

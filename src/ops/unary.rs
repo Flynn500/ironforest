@@ -9,7 +9,8 @@ where
     type Output = NdArray<T>;
 
     fn neg(mut self) -> Self::Output {
-        for elem in self.as_mut_slice() {
+        // self is always Owned here (consumed by value).
+        for elem in self.as_mut_slice().expect("Neg: array must be owned") {
             *elem = -(*elem);
         }
         self
@@ -83,7 +84,8 @@ where
     T: Copy,
     F: Fn(T) -> T,
 {
-    for elem in arr.as_mut_slice() {
+    // arr is always Owned here (consumed by value).
+    for elem in arr.as_mut_slice().expect("map_inplace: array must be owned") {
         *elem = f(*elem);
     }
     arr

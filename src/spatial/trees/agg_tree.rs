@@ -43,6 +43,12 @@ impl AggTree {
         let n_points = shape[0];
         let dim = shape[1];
 
+        // AggTree always reorders data (required by the compact step which
+        // removes low-error regions). Materialise External/Strided input now
+        // so reorder_data() and set_row() both have owned storage to work with.
+        if !data.is_owned() {
+            data = data.to_contiguous();
+        }
         if matches!(metric, DistanceMetric::Cosine) {
             for i in 0..n_points {
                 let normed = metric.pre_transform(data.row(i)).into_owned();
@@ -298,7 +304,7 @@ impl AggTree {
         let mut results = vec![0.0; n_queries];
 
         for i in 0..n_queries {
-            let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+            let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
             let mut density = 0.0;
             self.kde_recursive(0, query, bandwidth, &mut density, kernel);
             results[i] = density;
@@ -310,7 +316,7 @@ impl AggTree {
         let results: Vec<f64> = (0..n_queries)
             .into_par_iter()
             .map(|i| {
-                let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
                 let mut density = 0.0;
                 self.kde_recursive(0, query, bandwidth, &mut density, kernel);
                 density

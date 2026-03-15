@@ -117,7 +117,7 @@ fn weighted_lstsq(a: ArrayLike, b: ArrayLike, weights: ArrayLike) -> PyResult<(P
     let ax = aarr.matmul(&x);
     let diff = &barr - &ax;
 
-    let sqrt_w: Vec<f64> = warr.as_slice()
+    let sqrt_w: Vec<f64> = warr.as_slice_unchecked()
         .iter()
         .map(|&w| w.sqrt())
         .collect();

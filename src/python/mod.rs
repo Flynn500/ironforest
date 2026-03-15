@@ -2,7 +2,7 @@ use pyo3::prelude::*;
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::types::PyAny;
 use pyo3::{FromPyObject, Borrowed};
-use numpy::{PyReadonlyArrayDyn, PyUntypedArrayMethods};
+use numpy::{PyArrayDyn, PyArrayMethods, PyUntypedArray, PyUntypedArrayMethods};
 use crate::array::{NdArray, Shape};
 
 /// Validates that `v` is a non-empty, rectangular 2-D nested list.
@@ -27,27 +27,25 @@ pub enum ArrayData {
     Int(NdArray<i64>),
 }
 
-pub enum ArrayLike {
-    Array(PyArray),
-    Numpy { shape: Vec<usize>, data: Vec<f64> },
+pub enum ArrayLike<'py> {
+    Array(Bound<'py, PyArray>),
+    NumPy(Bound<'py, PyUntypedArray>),
+    Scalar(f64),
     Vec(Vec<f64>),
     Vec2D(Vec<Vec<f64>>),
-    Scalar(f64),
     IntScalar(i64),
 }
 
-impl<'a, 'py> FromPyObject<'a, 'py> for ArrayLike {
+impl<'a, 'py> FromPyObject<'a, 'py> for ArrayLike<'py> {
     type Error = PyErr;
 
     fn extract(ob: Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
-        if let Ok(arr) = ob.extract::<PyArray>() {
-            return Ok(ArrayLike::Array(arr));
+        if let Ok(arr) = ob.cast::<PyArray>() {
+            return Ok(ArrayLike::Array(arr.to_owned()));
         }
 
-        if let Ok(arr) = ob.extract::<PyReadonlyArrayDyn<f64>>() {
-            let shape = arr.shape().to_vec();
-            let data = arr.as_slice()?.to_vec();
-            return Ok(ArrayLike::Numpy { shape, data });
+        if let Ok(arr) = ob.cast::<PyUntypedArray>() {
+            return Ok(ArrayLike::NumPy(arr.to_owned()));
         }
 
         if let Ok(outer_list) = ob.extract::<Vec<Vec<f64>>>() {
@@ -72,14 +70,99 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ArrayLike {
     }
 }
 
-impl ArrayLike {
+impl<'py> ArrayLike<'py> {
+    pub fn into_ndarray(self) -> PyResult<NdArray<f64>> {
+        match self {
+            ArrayLike::Array(bound) => {
+                let inner = bound.borrow();
+                match &inner.inner {
+                    ArrayData::Float(f) => Ok(f.clone()),
+                    ArrayData::Int(_) => Err(PyTypeError::new_err(
+                        "expected float array; got integer array"
+                    )),
+                }
+            }
+            ArrayLike::NumPy(bound) => {
+                let arr = bound.cast::<PyArrayDyn<f64>>()
+                    .map_err(|_| PyTypeError::new_err("expected float64 numpy array"))?;
+                let readonly = arr.readonly();
+                let shape = readonly.shape().to_vec();
+
+                if readonly.is_c_contiguous() {
+                    // Zero-copy: Py<PyAny> owner increments the Python refcount, keeping
+                    // the numpy array alive for the duration of the NdArray.
+                    let slice = readonly.as_slice()?;
+                    let owner = bound.clone().into_any().unbind();
+                    Ok(unsafe { NdArray::from_external(owner, slice.as_ptr(), Shape::new(shape)) })
+                } else {
+                    // Non-C-contiguous (Fortran order, strided numpy view, etc.): copy.
+                    let data: Vec<f64> = readonly.as_array().iter().copied().collect();
+                    Ok(NdArray::from_vec(Shape::new(shape), data))
+                }
+            }
+            ArrayLike::Scalar(s) => Ok(NdArray::from_vec(Shape::scalar(), vec![s])),
+            ArrayLike::Vec(v) => Ok(NdArray::from_vec(Shape::d1(v.len()), v)),
+            ArrayLike::Vec2D(v) => {
+                let (rows, cols) = validate_vec2d(&v)?;
+                let flat: Vec<f64> = v.into_iter().flatten().collect();
+                Ok(NdArray::from_vec(Shape::new(vec![rows, cols]), flat))
+            }
+            ArrayLike::IntScalar(s) => Ok(NdArray::from_vec(Shape::scalar(), vec![s as f64])),
+        }
+    }
+
+    pub fn into_i64_ndarray(self) -> PyResult<NdArray<i64>> {
+        match self {
+            ArrayLike::Array(bound) => {
+                let inner = bound.borrow();
+                match &inner.inner {
+                    ArrayData::Int(i) => Ok(i.clone()),
+                    ArrayData::Float(f) => {
+                        let data: Vec<i64> = f.as_slice_unchecked().iter().map(|&x| x as i64).collect();
+                        Ok(NdArray::from_vec(f.shape().clone(), data))
+                    }
+                }
+            }
+            ArrayLike::NumPy(bound) => {
+                // Try i64 first, then fall back to f64 -> i64
+                if let Ok(arr) = bound.cast::<PyArrayDyn<i64>>() {
+                    let readonly = arr.readonly();
+                    let shape = readonly.shape().to_vec();
+                    let data = readonly.as_slice()?.to_vec();
+                    Ok(NdArray::from_vec(Shape::new(shape), data))
+                } else if let Ok(arr) = bound.cast::<PyArrayDyn<f64>>() {
+                    let readonly = arr.readonly();
+                    let shape = readonly.shape().to_vec();
+                    let data: Vec<i64> = readonly.as_slice()?.iter().map(|&x| x as i64).collect();
+                    Ok(NdArray::from_vec(Shape::new(shape), data))
+                } else {
+                    Err(PyTypeError::new_err("expected int64 or float64 numpy array"))
+                }
+            }
+            ArrayLike::Scalar(s) => Ok(NdArray::from_vec(Shape::new(vec![1]), vec![s as i64])),
+            ArrayLike::Vec(v) => {
+                let data: Vec<i64> = v.iter().map(|&x| x as i64).collect();
+                Ok(NdArray::from_vec(Shape::d1(data.len()), data))
+            }
+            ArrayLike::Vec2D(v) => {
+                let (rows, cols) = validate_vec2d(&v)?;
+                let data: Vec<i64> = v.into_iter().flatten().map(|x| x as i64).collect();
+                Ok(NdArray::from_vec(Shape::new(vec![rows, cols]), data))
+            }
+            ArrayLike::IntScalar(s) => Ok(NdArray::from_vec(Shape::new(vec![1]), vec![s])),
+        }
+    }
+
     pub fn ndim(&self) -> usize {
         match self {
-            ArrayLike::Array(a) => match &a.inner {
-                ArrayData::Float(f) => f.shape().dims().len(),
-                ArrayData::Int(i) => i.shape().dims().len(),
-            },
-            ArrayLike::Numpy { shape, .. } => shape.len(),
+            ArrayLike::Array(bound) => {
+                let inner = bound.borrow();
+                match &inner.inner {
+                    ArrayData::Float(f) => f.shape().dims().len(),
+                    ArrayData::Int(i) => i.shape().dims().len(),
+                }
+            }
+            ArrayLike::NumPy(bound) => bound.ndim(),
             ArrayLike::Vec(_) => 1,
             ArrayLike::Vec2D(_) => 2,
             ArrayLike::Scalar(_) | ArrayLike::IntScalar(_) => 0,
@@ -88,35 +171,16 @@ impl ArrayLike {
 
     pub fn is_int(&self) -> bool {
         match self {
-            ArrayLike::Array(a) => matches!(a.inner, ArrayData::Int(_)),
+            ArrayLike::Array(bound) => {
+                let inner = bound.borrow();
+                matches!(inner.inner, ArrayData::Int(_))
+            }
             ArrayLike::IntScalar(_) => true,
             _ => false,
         }
     }
 
-    pub fn into_ndarray(self) -> PyResult<NdArray<f64>> {
-        match self {
-            ArrayLike::Array(arr) => match arr.inner {
-                ArrayData::Float(f) => Ok(f),
-                ArrayData::Int(_) => Err(PyTypeError::new_err(
-                    "expected float array; got integer array"
-                )),
-            },
-            ArrayLike::Scalar(s) => Ok(NdArray::from_vec(Shape::scalar(), vec![s])),
-            ArrayLike::Vec(v) => Ok(NdArray::from_vec(Shape::d1(v.len()), v)),
-            ArrayLike::Vec2D(v) => {
-                let (rows, cols) = validate_vec2d(&v)?;
-                let flat: Vec<f64> = v.into_iter().flatten().collect();
-                Ok(NdArray::from_vec(Shape::new(vec![rows, cols]), flat))
-            }
-            ArrayLike::Numpy { shape, data } => {
-                Ok(NdArray::from_vec(Shape::new(shape), data))
-            }
-            ArrayLike::IntScalar(s) => Ok(NdArray::from_vec(Shape::scalar(), vec![s as f64])),
-        }
-    }
-
-    pub fn into_spatial_query_ndarray(self, expected_dim: usize) -> PyResult<NdArray<f64>> {
+        pub fn into_spatial_query_ndarray(self, expected_dim: usize) -> PyResult<NdArray<f64>> {
         let arr = self.into_ndarray()?;
         let shape = arr.shape().dims();
         
@@ -130,7 +194,7 @@ impl ArrayLike {
                 }
                 Ok(NdArray::from_vec(
                     Shape::new(vec![1, shape[0]]),
-                    arr.as_slice().to_vec()
+                    arr.as_slice_unchecked().to_vec()
                 ))
             }
             2 => {
@@ -151,7 +215,7 @@ impl ArrayLike {
         let shape = arr.shape().dims();
         
         if shape.len() == 1 || (shape.len() == 2 && shape[0] == 1) {
-            Ok(arr.as_slice().to_vec())
+            Ok(arr.as_slice_unchecked().to_vec())
         } else {
             Err(PyValueError::new_err("Expected 1D array"))
         }
@@ -166,33 +230,6 @@ impl ArrayLike {
             )));
         }
         Ok(vec)
-    }
-
-    pub fn into_i64_ndarray(self) -> PyResult<NdArray<i64>> {
-        match self {
-            ArrayLike::Array(arr) => match arr.inner {
-                ArrayData::Int(i) => Ok(i),
-                ArrayData::Float(f) => {
-                    let data: Vec<i64> = f.as_slice().iter().map(|&x| x as i64).collect();
-                    Ok(NdArray::from_vec(f.shape().clone(), data))
-                }
-            },
-            ArrayLike::Scalar(s) => Ok(NdArray::from_vec(Shape::new(vec![1]), vec![s as i64])),
-            ArrayLike::Vec(v) => {
-                let data: Vec<i64> = v.iter().map(|&x| x as i64).collect();
-                Ok(NdArray::from_vec(Shape::d1(data.len()), data))
-            }
-            ArrayLike::Vec2D(v) => {
-                let (rows, cols) = validate_vec2d(&v)?;
-                let data: Vec<i64> = v.into_iter().flatten().map(|x| x as i64).collect();
-                Ok(NdArray::from_vec(Shape::new(vec![rows, cols]), data))
-            }
-            ArrayLike::Numpy { shape, data } => {
-                let data: Vec<i64> = data.iter().map(|&x| x as i64).collect();
-                Ok(NdArray::from_vec(Shape::new(shape), data))
-            }
-            ArrayLike::IntScalar(s) => Ok(NdArray::from_vec(Shape::new(vec![1]), vec![s])),
-        }
     }
 }
 
@@ -222,6 +259,7 @@ impl PyArray {
             )),
         }
     }
+
 }
 
 // macro for handling dead array case
@@ -233,6 +271,38 @@ macro_rules! check_alive {
             ));
         }
     };
+}
+
+impl PyArray {
+    /// Returns a zero-copy view of the inner `NdArray<f64>`.
+    ///
+    /// For `External` (numpy-backed) arrays this increments the Python refcount
+    /// and copies the raw pointer — no data allocation.  For `Owned` arrays it
+    /// falls back to a materialising `clone()`.
+    pub fn as_view_float(&self) -> PyResult<NdArray<f64>> {
+        check_alive!(self);
+        Ok(self.as_float()?.as_view())
+    }
+
+    /// Moves the inner `NdArray<f64>` out of this `PyArray`, marks it dead, and
+    /// returns ownership to the caller.  The caller is expected to call
+    /// `.to_contiguous()` on the result when `Owned` storage is required (e.g.
+    /// for tree construction with reordering).
+    pub fn take_float(&mut self) -> PyResult<NdArray<f64>> {
+        check_alive!(self);
+        if matches!(self.inner, ArrayData::Int(_)) {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "operation not supported for integer arrays",
+            ));
+        }
+        let dummy = ArrayData::Float(NdArray::from_vec(Shape::new(vec![0, 0]), vec![]));
+        let taken = std::mem::replace(&mut self.inner, dummy);
+        self.alive = false;
+        match taken {
+            ArrayData::Float(nd) => Ok(nd),
+            ArrayData::Int(_) => unreachable!(),
+        }
+    }
 }
 
 pub mod array;

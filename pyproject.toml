@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ironforest"
-version = "0.5.2"
+version = "0.6.0"
 requires-python = ">=3.8"
 description = "Fast spatial queries and tree-based machine learning."
 readme = "README.md"

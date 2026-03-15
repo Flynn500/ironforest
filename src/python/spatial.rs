@@ -73,13 +73,13 @@ impl PySpatialResult {
     /// - Variable-width radius results: chunk lengths read from the `counts` int array.
     fn query_result_ranges(&self) -> Vec<(usize, usize)> {
         if self.n_queries == 1 {
-            let total = self.distances.as_float().unwrap().as_slice().len();
+            let total = self.distances.as_float().unwrap().as_slice_unchecked().len();
             vec![(0, total)]
         } else if let Some(k) = self.k {
             (0..self.n_queries).map(|i| (i * k, k)).collect()
         } else {
             let counts = self.counts.as_ref().unwrap();
-            let counts_slice = counts.as_int().unwrap().as_slice();
+            let counts_slice = counts.as_int().unwrap().as_slice_unchecked();
             let mut offset = 0;
             counts_slice.iter().map(|&c| {
                 let c = c as usize;
@@ -91,14 +91,14 @@ impl PySpatialResult {
     }
 
     fn per_query_distances(&self) -> Vec<&[f64]> {
-        let dist_slice = self.distances.as_float().unwrap().as_slice();
+        let dist_slice = self.distances.as_float().unwrap().as_slice_unchecked();
         self.query_result_ranges().into_iter()
             .map(|(off, len)| &dist_slice[off..off + len])
             .collect()
     }
 
     fn per_query_indices(&self) -> Vec<&[i64]> {
-        let idx_slice = self.indices.as_int().unwrap().as_slice();
+        let idx_slice = self.indices.as_int().unwrap().as_slice_unchecked();
         self.query_result_ranges().into_iter()
             .map(|(off, len)| &idx_slice[off..off + len])
             .collect()
@@ -133,7 +133,7 @@ impl PySpatialResult {
     }
 
     fn is_empty(&self) -> bool {
-        self.indices.as_int().unwrap().as_slice().is_empty()
+        self.indices.as_int().unwrap().as_slice_unchecked().is_empty()
     }
 
     fn min(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
@@ -173,7 +173,7 @@ impl PySpatialResult {
 
     fn centroid(&self, data: &PyArray) -> PyResult<PyArray> {
         let data_arr = data.as_float()?;
-        let data_slice = data_arr.as_slice();
+        let data_slice = data_arr.as_slice_unchecked();
         let dim = data_arr.shape().dims()[1];
         let chunks = self.per_query_indices();
 
@@ -265,7 +265,7 @@ fn get_tree_data(
             let idx_arr = idx.into_i64_ndarray()?;
             let k = idx_arr.len();
             let mut result = Vec::with_capacity(k * dim);
-            for &orig_idx in idx_arr.as_slice() {
+            for &orig_idx in idx_arr.as_slice_unchecked() {
                 let i = orig_idx as usize;
                 if i >= n_points {
                     return Err(PyValueError::new_err(format!(
@@ -366,7 +366,7 @@ macro_rules! impl_knn_query {
                         .unzip();
                     Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, k))
                 } else {
-                    let query_slice = &queries_arr.as_slice()[..tree!(self).dim];
+                    let query_slice = &queries_arr.as_slice_unchecked()[..tree!(self).dim];
                     let results = tree!(self).query_knn(query_slice, k);
                     let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
                         .map(|(i, d)| (i as i64, d)).unzip();
@@ -395,7 +395,7 @@ macro_rules! impl_ann_query {
                         .unzip();
                     Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, k))
                 } else {
-                    let query_slice = &queries_arr.as_slice()[..tree!(self).dim];
+                    let query_slice = &queries_arr.as_slice_unchecked()[..tree!(self).dim];
                     let results = tree!(self).query_ann(query_slice, k, n_candidates);
                     let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
                         .map(|(i, d)| (i as i64, d)).unzip();
@@ -427,7 +427,7 @@ macro_rules! impl_radius_query {
                     }
                     Ok(PySpatialResult::from_batch_radius(all_indices, all_distances, counts))
                 } else {
-                    let query_slice = &queries_arr.as_slice()[..tree!(self).dim];
+                    let query_slice = &queries_arr.as_slice_unchecked()[..tree!(self).dim];
                     let results = tree!(self).query_radius(query_slice, radius);
                     let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
                         .map(|(i, d)| (i as i64, d)).unzip();
@@ -466,7 +466,7 @@ macro_rules! impl_kde_query {
                 let result = tree!(self).kernel_density(&queries_arr, bandwidth, kernel_type, normalize);
 
                 if result.shape().dims()[0] == 1 {
-                    Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
+                    Ok(result.as_slice_unchecked()[0].into_pyobject(py)?.into_any().unbind())
                 } else {
                     Ok(PyArray { inner: ArrayData::Float(result), alive: true }.into_pyobject(py)?.into_any().unbind())
                 }
@@ -585,26 +585,50 @@ pub struct PyBallTree {
 
 #[pymethods] //not an error ide only
 impl PyBallTree {
+    /// Construct from an `Array` object.
+    ///
+    /// `preserve_array=True` (default): zero-copy view for numpy-backed arrays
+    /// — the `Array` stays alive and the tree holds an `External` reference.
+    /// `preserve_array=False`: extract the data, mark the `Array` as consumed,
+    /// and materialise to `Owned` so the tree can reorder for max query speed.
     #[staticmethod]
-    #[pyo3(signature = (array, leaf_size=20, metric="euclidean"))]
-    fn from_array(array: &PyArray, leaf_size: Option<usize>, metric: Option<&str>) -> PyResult<Self> {
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", preserve_array=true))]
+    fn from_array(mut array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, preserve_array: bool) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let tree = BallTree::new(array.as_float()?.clone(), leaf_size, metric);
+        let data = if preserve_array {
+            array.as_view_float()?
+        } else {
+            array.take_float()?.to_contiguous()
+        };
+        let tree = BallTree::new(data, leaf_size, metric);
         Ok(PyBallTree { inner: Some(tree) })
     }
 
+    /// Construct from any array-like input.
+    ///
+    /// `copy=True` (default): materialise to `Owned` storage so the tree can
+    /// reorder data for maximum query performance.
+    /// `copy=False`: pass the data as-is — C-contiguous numpy arrays become
+    /// zero-copy `External` storage (no reorder, one extra index lookup per
+    /// distance call); all other inputs are already `Owned` and behave the same
+    /// as `copy=True`.
     #[new]
-    #[pyo3(signature = (array, leaf_size=20, metric="euclidean"))]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", copy=true))]
     fn __init__(
         array: ArrayLike,
         leaf_size: Option<usize>,
         metric: Option<&str>,
+        copy: bool,
     ) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let data = array.into_ndarray()?;
-        let tree = BallTree::new(data.clone(), leaf_size, metric);
+        let data = if copy {
+            array.into_ndarray()?.to_contiguous()
+        } else {
+            array.into_ndarray()?
+        };
+        let tree = BallTree::new(data, leaf_size, metric);
         Ok(PyBallTree { inner: Some(tree) })
     }
 }
@@ -617,25 +641,35 @@ pub struct PyKDTree {
 #[pymethods] //not an error ide only
 impl PyKDTree {
     #[staticmethod]
-    #[pyo3(signature = (array, leaf_size=20, metric="euclidean"))]
-    fn from_array(array: &PyArray, leaf_size: Option<usize>, metric: Option<&str>) -> PyResult<Self> {
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", preserve_array=true))]
+    fn from_array(mut array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, preserve_array: bool) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let tree = KDTree::new(array.as_float()?.clone(), leaf_size, metric);
+        let data = if preserve_array {
+            array.as_view_float()?
+        } else {
+            array.take_float()?.to_contiguous()
+        };
+        let tree = KDTree::new(data, leaf_size, metric);
         Ok(PyKDTree { inner: Some(tree) })
     }
 
     #[new]
-    #[pyo3(signature = (array, leaf_size=20, metric="euclidean"))]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", copy=true))]
     fn __init__(
         array: ArrayLike,
         leaf_size: Option<usize>,
         metric: Option<&str>,
+        copy: bool,
     ) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let data = array.into_ndarray()?;
-        let tree = KDTree::new(data.clone(), leaf_size, metric);
+        let data = if copy {
+            array.into_ndarray()?.to_contiguous()
+        } else {
+            array.into_ndarray()?
+        };
+        let tree = KDTree::new(data, leaf_size, metric);
         Ok(PyKDTree { inner: Some(tree) })
     }
 }
@@ -648,28 +682,38 @@ pub struct PyVPTree {
 #[pymethods] //not an error ide only
 impl PyVPTree {
     #[staticmethod]
-    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", selection="variance"))]
-    fn from_array(array: &PyArray, leaf_size: Option<usize>, metric: Option<&str>, selection: Option<&str>) -> PyResult<Self> {
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", selection="variance", preserve_array=true))]
+    fn from_array(mut array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, selection: Option<&str>, preserve_array: bool) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let selection_method = parse_vantage_selection(selection.unwrap_or("random"))?;
-        let tree = VPTree::new(array.as_float()?.clone(), leaf_size, metric, selection_method);
+        let data = if preserve_array {
+            array.as_view_float()?
+        } else {
+            array.take_float()?.to_contiguous()
+        };
+        let tree = VPTree::new(data, leaf_size, metric, selection_method);
         Ok(PyVPTree { inner: Some(tree) })
     }
 
     #[new]
-    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", selection="variance"))]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", selection="variance", copy=true))]
     fn __init__(
         array: ArrayLike,
         leaf_size: Option<usize>,
         metric: Option<&str>,
         selection: Option<&str>,
+        copy: bool,
     ) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let selection_method = parse_vantage_selection(selection.unwrap_or("random"))?;
-        let data = array.into_ndarray()?;
-        let tree = VPTree::new(data.clone(), leaf_size, metric, selection_method);
+        let data = if copy {
+            array.into_ndarray()?.to_contiguous()
+        } else {
+            array.into_ndarray()?
+        };
+        let tree = VPTree::new(data, leaf_size, metric, selection_method);
         Ok(PyVPTree { inner: Some(tree) })
     }
 }
@@ -682,33 +726,42 @@ pub struct PyRPTree{
 #[pymethods] //not an error ide only
 impl PyRPTree {
     #[staticmethod]
-    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", projection="gaussian", seed=0))]
-    fn from_array(array: &PyArray, leaf_size: Option<usize>, metric: Option<&str>, projection: Option<&str>, seed: u64) -> PyResult<Self> {
-        let data = array.as_float()?;
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", projection="gaussian", seed=0, preserve_array=true))]
+    fn from_array(mut array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, projection: Option<&str>, seed: u64, preserve_array: bool) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0/(data.ndim() as f64).sqrt())?;
-        let tree = RPTree::new(data.clone(), leaf_size, metric, projection_method, seed);
+        // Borrow for ndim before consuming / viewing the array.
+        let ndim = array.as_float()?.ndim() as f64;
+        let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0 / ndim.sqrt())?;
+        let data = if preserve_array {
+            array.as_view_float()?
+        } else {
+            array.take_float()?.to_contiguous()
+        };
+        let tree = RPTree::new(data, leaf_size, metric, projection_method, seed);
         Ok(PyRPTree { inner: Some(tree) })
     }
 
     #[new]
-    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", projection="gaussian", seed=0))]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", projection="gaussian", seed=0, copy=true))]
     fn __init__(
         array: ArrayLike,
         leaf_size: Option<usize>,
         metric: Option<&str>,
         projection: Option<&str>,
         seed: u64,
+        copy: bool,
     ) -> PyResult<Self> {
-        let data = array.into_ndarray()?;
         let leaf_size = leaf_size.unwrap_or(20);
-        
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0/f64::sqrt(data.ndim() as f64))?;
-
-        let tree = RPTree::new(data.clone(), leaf_size, metric, projection_method, seed);
-        Ok(PyRPTree{ inner: Some(tree) })
+        let data = if copy {
+            array.into_ndarray()?.to_contiguous()
+        } else {
+            array.into_ndarray()?
+        };
+        let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0 / f64::sqrt(data.ndim() as f64))?;
+        let tree = RPTree::new(data, leaf_size, metric, projection_method, seed);
+        Ok(PyRPTree { inner: Some(tree) })
     }
 }
 
@@ -720,22 +773,32 @@ pub struct PyBruteForce {
 #[pymethods] //not an error ide only
 impl PyBruteForce {
     #[staticmethod]
-    #[pyo3(signature = (array, metric="euclidean"))]
-    fn from_array(array: &PyArray, metric: Option<&str>) -> PyResult<Self> {
+    #[pyo3(signature = (array, metric="euclidean", preserve_array=true))]
+    fn from_array(mut array: PyRefMut<'_, PyArray>, metric: Option<&str>, preserve_array: bool) -> PyResult<Self> {
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let tree = BruteForce::new(array.as_float()?.clone(), metric);
+        let data = if preserve_array {
+            array.as_view_float()?
+        } else {
+            array.take_float()?.to_contiguous()
+        };
+        let tree = BruteForce::new(data, metric);
         Ok(PyBruteForce { inner: Some(tree) })
     }
 
     #[new]
-    #[pyo3(signature = (array, metric="euclidean"))]
+    #[pyo3(signature = (array, metric="euclidean", copy=true))]
     fn __init__(
         array: ArrayLike,
         metric: Option<&str>,
+        copy: bool,
     ) -> PyResult<Self> {
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let data = array.into_ndarray()?;
-        let tree = BruteForce::new(data.clone(), metric);
+        let data = if copy {
+            array.into_ndarray()?.to_contiguous()
+        } else {
+            array.into_ndarray()?
+        };
+        let tree = BruteForce::new(data, metric);
         Ok(PyBruteForce { inner: Some(tree) })
     }
 }
@@ -747,27 +810,39 @@ pub struct PyAggTree {
 
 #[pymethods] //ide error
 impl PyAggTree {
+    /// Note: `preserve_array` is accepted for API consistency but `AggTree`
+    /// always materialises its data — the compact step requires an owned,
+    /// reordered buffer. External (numpy-backed) arrays are always copied.
     #[staticmethod]
-    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", kernel="gaussian", bandwidth=1.0, atol=0.01))]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", kernel="gaussian", bandwidth=1.0, atol=0.01, preserve_array=true))]
     fn from_array(
-        array: &PyArray,
+        mut array: PyRefMut<'_, PyArray>,
         leaf_size: Option<usize>,
         metric: Option<&str>,
         kernel: Option<&str>,
         bandwidth: Option<f64>,
         atol: Option<f64>,
+        preserve_array: bool,
     ) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let kernel = parse_kernel(kernel.unwrap_or("gaussian"))?;
         let bandwidth = bandwidth.unwrap_or(1.0);
         let atol = atol.unwrap_or(0.01);
-        let tree = AggTree::new(array.as_float()?.clone(), leaf_size, metric, kernel, bandwidth, atol);
+        let data = if preserve_array {
+            array.as_view_float()?     // AggTree::new() will materialise internally
+        } else {
+            array.take_float()?.to_contiguous()
+        };
+        let tree = AggTree::new(data, leaf_size, metric, kernel, bandwidth, atol);
         Ok(PyAggTree { inner: Some(tree) })
     }
 
+    /// Note: `copy` is accepted for API consistency but `AggTree` always
+    /// materialises its data — the compact step requires an owned, reordered
+    /// buffer. External (numpy-backed) arrays are always copied internally.
     #[new]
-    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", kernel="gaussian", bandwidth=1.0, atol=0.01))]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", kernel="gaussian", bandwidth=1.0, atol=0.01, copy=true))]
     fn __init__(
         array: ArrayLike,
         leaf_size: Option<usize>,
@@ -775,14 +850,19 @@ impl PyAggTree {
         kernel: Option<&str>,
         bandwidth: Option<f64>,
         atol: Option<f64>,
+        copy: bool,
     ) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let kernel = parse_kernel(kernel.unwrap_or("gaussian"))?;
         let bandwidth = bandwidth.unwrap_or(1.0);
         let atol = atol.unwrap_or(0.01);
-        let data = array.into_ndarray()?;
-        let tree = AggTree::new(data.clone(), leaf_size, metric, kernel, bandwidth, atol);
+        let data = if copy {
+            array.into_ndarray()?.to_contiguous()
+        } else {
+            array.into_ndarray()?      // AggTree::new() will materialise internally
+        };
+        let tree = AggTree::new(data, leaf_size, metric, kernel, bandwidth, atol);
         Ok(PyAggTree { inner: Some(tree) })
     }
 
@@ -807,7 +887,7 @@ impl PyAggTree {
         let result = tree!(self).kernel_density(&queries_arr, normalize);
 
         if result.shape().dims()[0] == 1 {
-            Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
+            Ok(result.as_slice_unchecked()[0].into_pyobject(py)?.into_any().unbind())
         } else {
             Ok(PyArray { inner: ArrayData::Float(result), alive: true }.into_pyobject(py)?.into_any().unbind())
         }
@@ -849,7 +929,7 @@ impl PyAggTree {
 //             .ok_or_else(|| PyValueError::new_err("Tree is uninitialized"))?;
 //         let arr = point.into_spatial_query_ndarray(tree.dim)?;
 //         let point_idx = tree.n_points;
-//         tree.insert(arr.as_slice().to_vec(), point_idx);
+//         tree.insert(arr.as_slice_unchecked().to_vec(), point_idx);
 //         Ok(())
 //     }
 
@@ -870,7 +950,7 @@ impl PyAggTree {
 //                 let idx_arr = idx.into_i64_ndarray()?;
 //                 let k = idx_arr.len();
 //                 let mut result = Vec::with_capacity(k * tree.dim);
-//                 for &i in idx_arr.as_slice() {
+//                 for &i in idx_arr.as_slice_unchecked() {
 //                     let i = i as usize;
 //                     if i >= tree.n_points {
 //                         return Err(PyValueError::new_err(format!(
@@ -905,7 +985,7 @@ impl PyAggTree {
 //             }
 //             Ok(PySpatialResult::from_batch_radius(all_indices, all_distances, counts))
 //         } else {
-//             let query_slice = &queries_arr.as_slice()[..tree.dim];
+//             let query_slice = &queries_arr.as_slice_unchecked()[..tree.dim];
 //             let results = tree.query_radius(query_slice, radius);
 //             let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
 //                 .map(|(i, d)| (i as i64, d)).unzip();
@@ -926,7 +1006,7 @@ impl PyAggTree {
 //                 .unzip();
 //             Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, k))
 //         } else {
-//             let query_slice = &queries_arr.as_slice()[..tree.dim];
+//             let query_slice = &queries_arr.as_slice_unchecked()[..tree.dim];
 //             let results = tree.query_knn(query_slice, k);
 //             let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
 //                 .map(|(i, d)| (i as i64, d)).unzip();
@@ -959,7 +1039,7 @@ impl PyAggTree {
 //         let result = tree.kernel_density(&queries_arr, bandwidth, kernel_type, normalize);
 
 //         if result.shape().dims()[0] == 1 {
-//             Ok(result.as_slice()[0].into_pyobject(py)?.into_any().unbind())
+//             Ok(result.as_slice_unchecked()[0].into_pyobject(py)?.into_any().unbind())
 //         } else {
 //             Ok(PyArray { inner: ArrayData::Float(result), alive: true }.into_pyobject(py)?.into_any().unbind())
 //         }
@@ -1045,7 +1125,7 @@ impl PyProjectionReducer {
         }
         let transformed = reducer.transform(&input_ndarray);
         if was_1d {
-            let len = transformed.as_slice().len();
+            let len = transformed.as_slice_unchecked().len();
             return Ok(PyArray { inner: ArrayData::Float(transformed.reshape(vec![len])), alive: true });
         }
 
