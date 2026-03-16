@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use pyo3::{Py, PyAny};
+use pyo3::buffer::PyBuffer;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub enum Storage<T> {
@@ -14,6 +15,11 @@ pub enum Storage<T> {
     Strided {
         base: Arc<[T]>,
         offset: usize,
+        len: usize,
+    },
+
+    Buffer {
+        buf: PyBuffer<T>,
         len: usize,
     },
 }
@@ -41,6 +47,10 @@ impl<T> Storage<T> {
                 panic!("into_vec() called on Strided storage; \
                         call to_contiguous() on the NdArray first")
             }
+            Storage::Buffer { .. } => {
+                panic!("into_vec() called on read-only Buffer storage; \
+                        clone the NdArray first to get an Owned copy")
+            }
         }
     }
 
@@ -49,6 +59,7 @@ impl<T> Storage<T> {
             Storage::Owned(v) => v.len(),
             Storage::External { len, .. } => *len,
             Storage::Strided { len, .. } => *len,
+            Storage::Buffer { len, .. } => *len,
         }
     }
 
@@ -64,6 +75,10 @@ impl<T> Storage<T> {
         matches!(self, Storage::Owned(_))
     }
 
+    pub fn is_buffer(&self) -> bool {
+        matches!(self, Storage::Buffer { .. })
+    }
+
     pub fn as_slice(&self) -> Option<&[T]> {
         match self {
             Storage::Owned(v) => Some(v.as_slice()),
@@ -71,6 +86,9 @@ impl<T> Storage<T> {
                 std::slice::from_raw_parts(*ptr, *len)
             }),
             Storage::Strided { .. } => None,
+            Storage::Buffer { buf, len } => Some(unsafe {
+                std::slice::from_raw_parts(buf.buf_ptr() as *const T, *len)
+            }),
         }
     }
 
@@ -80,10 +98,19 @@ impl<T> Storage<T> {
             .expect("as_slice_unchecked() called on Strided storage; call to_contiguous() first")
     }
 
+    pub fn as_raw_ptr(&self) -> *const T {
+        match self {
+            Storage::Owned(v) => v.as_ptr(),
+            Storage::External { ptr, .. } => *ptr,
+            Storage::Strided { base, offset, .. } => unsafe { base.as_ptr().add(*offset) },
+            Storage::Buffer { buf, .. } => buf.buf_ptr() as *const T,
+        }
+    }
+
     pub fn as_mut_slice(&mut self) -> Option<&mut [T]> {
         match self {
             Storage::Owned(v) => Some(v.as_mut_slice()),
-            Storage::External { .. } | Storage::Strided { .. } => None,
+            Storage::External { .. } | Storage::Strided { .. } | Storage::Buffer { .. } => None,
         }
     }
 
@@ -105,14 +132,20 @@ impl<T> Storage<T> {
                     None
                 }
             }
+            Storage::Buffer { buf, len } => {
+                if index < *len {
+                    Some(unsafe { &*(buf.buf_ptr() as *const T).add(index) })
+                } else {
+                    None
+                }
+            }
         }
     }
 
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         match self {
             Storage::Owned(v) => v.get_mut(index),
-            Storage::External { .. } => None,
-            Storage::Strided { .. } => None,
+            Storage::External { .. } | Storage::Strided { .. } | Storage::Buffer { .. } => None,
         }
     }
 }
@@ -131,6 +164,10 @@ impl<T: Clone> Storage<T> {
             Storage::Strided { base, offset, len } => {
                 base[*offset..*offset + *len].to_vec()
             }
+
+            Storage::Buffer { buf, len } => unsafe {
+                std::slice::from_raw_parts(buf.buf_ptr() as *const T, *len).to_vec()
+            },
         }
     }
 }
@@ -154,6 +191,9 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Storage<T> {
                 .field("offset", offset)
                 .field("len", len)
                 .finish(),
+            Storage::Buffer { len, .. } => {
+                f.debug_struct("Buffer").field("len", len).finish()
+            }
         }
     }
 }
@@ -168,9 +208,9 @@ impl<T: Serialize> Serialize for Storage<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             Storage::Owned(v) => v.serialize(serializer),
-            Storage::External { .. } | Storage::Strided { .. } => Err(
+            Storage::External { .. } | Storage::Strided { .. } | Storage::Buffer { .. } => Err(
                 serde::ser::Error::custom(
-                    "cannot serialise External or Strided storage; \
+                    "cannot serialise External, Strided, or Buffer storage; \
                      call to_contiguous() or clone the NdArray first",
                 ),
             ),

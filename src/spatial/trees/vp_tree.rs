@@ -91,7 +91,7 @@ impl VPTree {
         let n_points = shape[0];
         let dim = shape[1];
         
-        if matches!(metric, DistanceMetric::Cosine) && !data.is_owned() {
+        if (matches!(metric, DistanceMetric::Cosine) && !data.is_owned()) || !data.is_contiguous() {
             data = data.to_contiguous();
         }
         if matches!(metric, DistanceMetric::Cosine) {

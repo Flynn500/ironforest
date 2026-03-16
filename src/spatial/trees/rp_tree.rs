@@ -48,7 +48,7 @@ impl RPTree {
 
         let rng = Generator::from_seed(seed);
 
-        if matches!(metric, DistanceMetric::Cosine) && !data.is_owned() {
+        if (matches!(metric, DistanceMetric::Cosine) && !data.is_owned()) || !data.is_contiguous() {
             data = data.to_contiguous();
         }
         if matches!(metric, DistanceMetric::Cosine) {
@@ -212,20 +212,20 @@ impl RPTree {
         results
     }
 
-    fn seq_ann_batch(&self, queries: &NdArray<f64>, n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, f64)>> {
+    fn seq_ann_batch(&self, queries: &[f64], n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, f64)>> {
         (0..n_queries)
             .map(|i| {
-                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
+                let query = &queries[i * dim..(i + 1) * dim];
                 self.query_ann(query, k, n_candidates)
             })
             .collect()
     }
 
-    fn par_ann_batch(&self, queries: &NdArray<f64>, n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, f64)>> {
+    fn par_ann_batch(&self, queries: &[f64], n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, f64)>> {
         (0..n_queries)
             .into_par_iter()
             .map(|i| {
-                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
+                let query = &queries[i * dim..(i + 1) * dim];
                 self.query_ann(query, k, n_candidates)
             })
             .collect()
@@ -238,10 +238,12 @@ impl RPTree {
         let dim = shape[1];
         assert_eq!(dim, self.dim(), "Query dimension must match tree dimension");
 
+        let queries_cow = queries.as_contiguous_slice();
+        let queries_slice: &[f64] = &queries_cow;
         if n_queries >= KNN_PAR_THRESHOLD {
-            self.par_ann_batch(queries, n_queries, dim, k, n_candidates)
+            self.par_ann_batch(queries_slice, n_queries, dim, k, n_candidates)
         } else {
-            self.seq_ann_batch(queries, n_queries, dim, k, n_candidates)
+            self.seq_ann_batch(queries_slice, n_queries, dim, k, n_candidates)
         }
     }
 

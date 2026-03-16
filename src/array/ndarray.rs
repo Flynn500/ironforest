@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::sync::Arc;
-use pyo3::{Py, PyAny};
+use pyo3::{Py, PyAny, Python};
+use pyo3::buffer::PyBuffer;
 use crate::array::shape::Shape;
 use crate::array::storage::Storage;
 use crate::array::strided_iter::StridedIter;
@@ -96,6 +97,18 @@ impl<T> NdArray<T> {
         &self.as_slice_unchecked()[start..start + self.strides[0]]
     }
 
+    pub fn row_slice(&self, i: usize) -> Option<&[T]> {
+        let dims = self.shape.dims();
+        if dims.len() < 2 { return None; }
+        if *self.strides.last().unwrap() != 1 { return None; }
+        let n_cols = *dims.last().unwrap();
+        let row_offset = i * self.strides[0];
+        unsafe {
+            let ptr = self.storage.as_raw_ptr().add(row_offset);
+            Some(std::slice::from_raw_parts(ptr, n_cols))
+        }
+    }
+
     pub fn set_row(&mut self, i: usize, values: &[T]) where T: Copy {
         assert!(self.ndim() >= 2);
         assert!(i < self.shape.dims()[0]);
@@ -114,6 +127,10 @@ impl<T> NdArray<T> {
     pub fn get_mut(&mut self, indices: &[usize]) -> Option<&mut T> {
         self.flat_index(indices)
             .and_then(|i| self.storage.get_mut(i))
+    }
+
+    pub fn as_raw_parts(&self) -> (*const T, usize) {
+        (self.storage.as_raw_ptr(), self.storage.len())
     }
 
     pub fn is_contiguous(&self) -> bool {
@@ -150,6 +167,26 @@ impl<T> NdArray<T> {
             shape,
             strides,
             storage: Storage::External { owner, ptr, len },
+        }
+    }
+
+    pub fn from_buffer(py: Python<'_>, buf: PyBuffer<T>) -> pyo3::PyResult<Self>
+    where
+        T: pyo3::buffer::Element + Copy,
+    {
+        let shape: Vec<usize> = buf.shape().iter().map(|&d| d as usize).collect();
+        let len = buf.item_count();
+
+        if buf.is_c_contiguous() {
+            let strides = Shape::new(shape.clone()).strides_row_major();
+            Ok(NdArray {
+                shape: Shape::new(shape),
+                strides,
+                storage: Storage::Buffer { buf, len },
+            })
+        } else {
+            let data = buf.to_vec(py)?;
+            Ok(NdArray::from_vec(Shape::new(shape), data))
         }
     }
 }
@@ -230,7 +267,7 @@ impl<T: Copy> NdArray<T> {
                     len: new_len,
                 }
             }
-            Storage::External { .. } => {
+            Storage::External { .. } | Storage::Buffer { .. } => {
                 let owned = self.to_contiguous();
                 return owned.slice_view(axes);
             }

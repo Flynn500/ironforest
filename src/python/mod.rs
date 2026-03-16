@@ -30,6 +30,9 @@ pub enum ArrayData {
 pub enum ArrayLike<'py> {
     Array(Bound<'py, PyArray>),
     NumPy(Bound<'py, PyUntypedArray>),
+    /// Any Python object implementing the buffer protocol (excluding numpy arrays,
+    /// which are handled above by the more specific `NumPy` variant).
+    Buffer(Bound<'py, PyAny>),
     Scalar(f64),
     Vec(Vec<f64>),
     Vec2D(Vec<Vec<f64>>),
@@ -46,6 +49,12 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ArrayLike<'py> {
 
         if let Ok(arr) = ob.cast::<PyUntypedArray>() {
             return Ok(ArrayLike::NumPy(arr.to_owned()));
+        }
+
+        // Check the tp_as_buffer slot to detect any remaining buffer-protocol objects
+        // (e.g. `array.array`, `memoryview`, ctypes arrays, etc.).
+        if unsafe { !(*(*ob.as_ptr()).ob_type).tp_as_buffer.is_null() } {
+            return Ok(ArrayLike::Buffer(ob.to_owned()));
         }
 
         if let Ok(outer_list) = ob.extract::<Vec<Vec<f64>>>() {
@@ -89,16 +98,17 @@ impl<'py> ArrayLike<'py> {
                 let shape = readonly.shape().to_vec();
 
                 if readonly.is_c_contiguous() {
-                    // Zero-copy: Py<PyAny> owner increments the Python refcount, keeping
-                    // the numpy array alive for the duration of the NdArray.
                     let slice = readonly.as_slice()?;
                     let owner = bound.clone().into_any().unbind();
                     Ok(unsafe { NdArray::from_external(owner, slice.as_ptr(), Shape::new(shape)) })
                 } else {
-                    // Non-C-contiguous (Fortran order, strided numpy view, etc.): copy.
                     let data: Vec<f64> = readonly.as_array().iter().copied().collect();
                     Ok(NdArray::from_vec(Shape::new(shape), data))
                 }
+            }
+            ArrayLike::Buffer(bound) => {
+                let buf = pyo3::buffer::PyBuffer::<f64>::get(&bound)?;
+                NdArray::from_buffer(bound.py(), buf)
             }
             ArrayLike::Scalar(s) => Ok(NdArray::from_vec(Shape::scalar(), vec![s])),
             ArrayLike::Vec(v) => Ok(NdArray::from_vec(Shape::d1(v.len()), v)),
@@ -139,6 +149,16 @@ impl<'py> ArrayLike<'py> {
                     Err(PyTypeError::new_err("expected int64 or float64 numpy array"))
                 }
             }
+            ArrayLike::Buffer(bound) => {
+                if let Ok(buf) = pyo3::buffer::PyBuffer::<i64>::get(&bound) {
+                    NdArray::from_buffer(bound.py(), buf)
+                } else {
+                    let buf = pyo3::buffer::PyBuffer::<f64>::get(&bound)?;
+                    let shape: Vec<usize> = buf.shape().iter().map(|&d| d as usize).collect();
+                    let data: Vec<i64> = buf.to_vec(bound.py())?.into_iter().map(|x| x as i64).collect();
+                    Ok(NdArray::from_vec(Shape::new(shape), data))
+                }
+            }
             ArrayLike::Scalar(s) => Ok(NdArray::from_vec(Shape::new(vec![1]), vec![s as i64])),
             ArrayLike::Vec(v) => {
                 let data: Vec<i64> = v.iter().map(|&x| x as i64).collect();
@@ -163,6 +183,11 @@ impl<'py> ArrayLike<'py> {
                 }
             }
             ArrayLike::NumPy(bound) => bound.ndim(),
+            ArrayLike::Buffer(bound) => {
+                pyo3::buffer::PyBuffer::<u8>::get(bound)
+                    .map(|b| b.dimensions())
+                    .unwrap_or(0)
+            }
             ArrayLike::Vec(_) => 1,
             ArrayLike::Vec2D(_) => 2,
             ArrayLike::Scalar(_) | ArrayLike::IntScalar(_) => 0,
@@ -176,6 +201,8 @@ impl<'py> ArrayLike<'py> {
                 matches!(inner.inner, ArrayData::Int(_))
             }
             ArrayLike::IntScalar(_) => true,
+
+            ArrayLike::Buffer(_) => false,
             _ => false,
         }
     }

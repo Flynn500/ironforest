@@ -77,6 +77,7 @@ fn expand_axis_indices(axis: &AxisIndex) -> Vec<usize> {
 }
 
 
+
 #[pymethods]
 impl PyArray {
     // -------------------------------------------------------------------------
@@ -1296,6 +1297,100 @@ impl PyArray {
 
         let arr = self.gather_rows(row_starts, row_size, result_dims);
         Ok(arr.into_pyobject(py)?.into_any().unbind())
+    }
+}
+
+// -------------------------------------------------------------------------
+// Buffer protocol
+// -------------------------------------------------------------------------
+
+struct BufferViewInternal {
+    shape: Vec<isize>,
+    strides: Vec<isize>,
+    format: std::ffi::CString,
+}
+
+#[pymethods]
+impl PyArray {
+    unsafe fn __getbuffer__(
+        slf: pyo3::Bound<'_, Self>,
+        view: *mut pyo3::ffi::Py_buffer,
+        flags: std::ffi::c_int,
+    ) -> pyo3::PyResult<()> {
+        use std::ffi::c_void;
+        use std::mem::size_of;
+        use pyo3::ffi;
+
+        let py_arr = slf.borrow();
+        if !py_arr.alive {
+            return Err(pyo3::exceptions::PyBufferError::new_err(
+                "Array has been consumed by a tree"
+            ));
+        }
+
+        let wants_write = (flags & ffi::PyBUF_WRITABLE) != 0;
+
+        macro_rules! fill_view {
+            ($arr:expr, $fmt:literal, $T:ty) => {{
+                if wants_write && !$arr.is_owned() {
+                    return Err(pyo3::exceptions::PyBufferError::new_err(
+                        "Object is not writable"
+                    ));
+                }
+                let is_contiguous = $arr.is_contiguous();
+                if !is_contiguous && (flags & ffi::PyBUF_STRIDES) == 0 {
+                    return Err(pyo3::exceptions::PyBufferError::new_err(
+                        "Array is not contiguous; request strides (PyBUF_STRIDES) \
+                         or call to_contiguous() first"
+                    ));
+                }
+                let (raw_ptr, elem_count) = $arr.as_raw_parts();
+                let ptr = raw_ptr as *mut c_void;
+                let itemsize = size_of::<$T>() as isize;
+                let ndim = $arr.shape().dims().len();
+                let shape: Vec<isize> = $arr.shape().dims().iter().map(|&d| d as isize).collect();
+
+                let strides: Vec<isize> = $arr.strides().iter()
+                    .map(|&s| s as isize * itemsize)
+                    .collect();
+                let format = std::ffi::CString::new($fmt).unwrap();
+                let internal = Box::new(BufferViewInternal { shape, strides, format });
+                let internal_raw = Box::into_raw(internal);
+
+                unsafe {
+                    (*view).obj = slf.clone().into_any().unbind().into_ptr();
+                    (*view).buf = ptr;
+                    (*view).len = elem_count as isize * itemsize;
+                    (*view).itemsize = itemsize;
+                    (*view).readonly = if $arr.is_owned() && !wants_write { 0 } else { 1 };
+                    (*view).ndim = ndim as std::ffi::c_int;
+                    (*view).format = if (flags & ffi::PyBUF_FORMAT) != 0 {
+                        (*internal_raw).format.as_ptr() as *mut _
+                    } else {
+                        std::ptr::null_mut()
+                    };
+                    (*view).shape = (*internal_raw).shape.as_mut_ptr();
+                    (*view).strides = (*internal_raw).strides.as_mut_ptr();
+                    (*view).suboffsets = std::ptr::null_mut();
+                    (*view).internal = internal_raw as *mut c_void;
+                }
+            }};
+        }
+
+        match &py_arr.inner {
+            super::ArrayData::Float(arr) => fill_view!(arr, "d", f64),
+            super::ArrayData::Int(arr)   => fill_view!(arr, "q", i64),
+        }
+        Ok(())
+    }
+
+    unsafe fn __releasebuffer__(&self, view: *mut pyo3::ffi::Py_buffer) {
+        unsafe {
+            if !(*view).internal.is_null() {
+                drop(Box::from_raw((*view).internal as *mut BufferViewInternal));
+                (*view).internal = std::ptr::null_mut();
+            }
+        }
     }
 }
 

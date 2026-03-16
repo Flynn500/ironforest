@@ -83,7 +83,14 @@ impl MTree {
         
         let mut tree = Self::new(dim, capacity, metric);
 
-        for (i, point) in array.as_slice_unchecked().chunks(dim).enumerate() {
+        let array_contig;
+        let array_slice = if array.is_contiguous() {
+            array.as_slice().unwrap()
+        } else {
+            array_contig = array.to_contiguous();
+            array_contig.as_slice().unwrap()
+        };
+        for (i, point) in array_slice.chunks(dim).enumerate() {
             let transformed = metric.pre_transform(point);
             tree.insert(transformed.into_owned(), i);
         }

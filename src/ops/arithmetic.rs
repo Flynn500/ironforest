@@ -86,8 +86,6 @@ where
     F: Fn(T, T) -> T,
 {
     if a.shape() == b.shape() {
-        // `a` is always Owned here (consumed by value); `b` may be External.
-        // Materialise `b` if strided so flat indexing is valid.
         let b_c;
         let b = if b.is_contiguous() { b } else { b_c = b.to_contiguous(); &b_c };
         let b_data = b.as_slice_unchecked();

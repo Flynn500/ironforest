@@ -41,9 +41,9 @@ impl KDTree {
         let n_points = shape[0];
         let dim = shape[1];
 
-        // Cosine normalisation writes back into `data` — requires owned storage.
-        // Materialise External/Strided input up-front if needed.
-        if matches!(metric, DistanceMetric::Cosine) && !data.is_owned() {
+        // Cosine normalisation requires owned storage; non-contiguous (Strided) arrays must
+        // also be materialised because get_point() exposes data() as a flat contiguous slice.
+        if (matches!(metric, DistanceMetric::Cosine) && !data.is_owned()) || !data.is_contiguous() {
             data = data.to_contiguous();
         }
         if matches!(metric, DistanceMetric::Cosine) {

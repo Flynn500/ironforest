@@ -29,10 +29,6 @@ pub trait SpatialTree: Sync {
         (first, second, dist)
     }
 
-    /// Whether the data buffer has been physically reordered to match the tree's
-    /// node `(start, end)` index ranges. When `true`, position `i` in the flat
-    /// buffer IS the point for tree-index `i`. When `false` (zero-copy path),
-    /// data is in original order and `indices[i]` provides the correct row.
     fn data_is_reordered(&self) -> bool;
 
     fn get_point(&self, i: usize) -> &[f64] {

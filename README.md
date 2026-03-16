@@ -76,7 +76,7 @@ Speed comparison of our KDTree vs SciPy & Scikit-Learn on a randomly generated u
 KDTree is generally seen as the baseline spatial indexing tree. Our other trees scale better with dimensionality or provide better results depending on the nature of the dataset used, see `docs/spatial.md` & `docs/agg_tree.md` for more detailed information.
 
 ## Tree-Based Models
-IronForest includes tree-based ML models that run entirely on the Rust core no external dependencies at runtime.
+IronForest includes tree-based ML models that run entirely on the Rust core no external dependencies at runtime. Decision trees support standard axis splits as well as random projection and vantage point based splits.
 
 - Decision Trees
 - Random Forest

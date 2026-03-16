@@ -300,11 +300,11 @@ impl AggTree {
         }
     }
 
-    fn seq_kde_recursion(&self, kernel: KernelType, bandwidth: f64, queries: &NdArray<f64>, n_queries: usize, dim: usize) -> Vec<f64>{
+    fn seq_kde_recursion(&self, kernel: KernelType, bandwidth: f64, queries: &[f64], n_queries: usize, dim: usize) -> Vec<f64>{
         let mut results = vec![0.0; n_queries];
 
         for i in 0..n_queries {
-            let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
+            let query = &queries[i * dim..(i + 1) * dim];
             let mut density = 0.0;
             self.kde_recursive(0, query, bandwidth, &mut density, kernel);
             results[i] = density;
@@ -312,11 +312,11 @@ impl AggTree {
         results
     }
 
-    fn par_kde_recursion(&self, kernel: KernelType, bandwidth: f64, queries: &NdArray<f64>, n_queries: usize, dim: usize) -> Vec<f64>{
+    fn par_kde_recursion(&self, kernel: KernelType, bandwidth: f64, queries: &[f64], n_queries: usize, dim: usize) -> Vec<f64>{
         let results: Vec<f64> = (0..n_queries)
             .into_par_iter()
             .map(|i| {
-                let query = &queries.as_slice_unchecked()[i * dim..(i + 1) * dim];
+                let query = &queries[i * dim..(i + 1) * dim];
                 let mut density = 0.0;
                 self.kde_recursive(0, query, bandwidth, &mut density, kernel);
                 density
@@ -333,10 +333,12 @@ impl AggTree {
         let dim = shape[1];
         assert_eq!(dim, self.dim, "Query dimension must match tree dimension");
 
+        let queries_cow = queries.as_contiguous_slice();
+        let queries_slice: &[f64] = &queries_cow;
         let mut results = if n_queries >= KDE_PAR_THRESHOLD {
-            self.par_kde_recursion(self.kernel, self.bandwidth, queries, n_queries, dim)
+            self.par_kde_recursion(self.kernel, self.bandwidth, queries_slice, n_queries, dim)
         } else {
-            self.seq_kde_recursion(self.kernel, self.bandwidth, queries, n_queries, dim)
+            self.seq_kde_recursion(self.kernel, self.bandwidth, queries_slice, n_queries, dim)
         };
 
         if normalize {
