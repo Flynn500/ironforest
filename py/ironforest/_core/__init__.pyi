@@ -279,6 +279,10 @@ class Array(Sequence[T_co], Generic[T_co]):
     @property
     def ndim(self) -> int:
         """Get the number of dimensions."""
+    
+    @property
+    def alive(self) -> bool:
+        """Check if the array is alive."""
 
     def get(self, indices: Sequence[int]) -> float | int:
         """Get element at indices."""
@@ -409,9 +413,8 @@ class Array(Sequence[T_co], Generic[T_co]):
     def __ne__(self, other: ArrayLike) -> Array: ...  # type: ignore[override]
     def __repr__(self) -> str: ...
 
-    def __buffer__(self): ...
-    def __getbuffer__(self): ...
-    def __releasebuffer__(self): ...
+    def __getbuffer__(self, flags: int) -> memoryview: ...
+    def __releasebuffer__(self, buffer: memoryview) -> None: ...
 
 
 from . import linalg as linalg

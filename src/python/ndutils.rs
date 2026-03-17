@@ -1,7 +1,7 @@
 use pyo3::{exceptions::PyTypeError, prelude::*};
 use pyo3::types::PyAny;
 use pyo3::exceptions::PyValueError;
-use numpy::{PyReadonlyArrayDyn, PyUntypedArrayMethods};
+use numpy::{PyArrayDyn, PyArrayMethods, PyReadonlyArrayDyn, PyUntypedArrayMethods};
 use crate::array::{NdArray, Shape};
 use super::{PyArray, ArrayData, ArrayLike};
 
@@ -126,21 +126,38 @@ fn from_numpy(_py: Python<'_>, arr: &Bound<'_, PyAny>) -> PyResult<PyArray> {
 
     match dtype_str.as_str() {
         "f" => {
-            let numpy_arr: PyReadonlyArrayDyn<f64> = arr.extract()?;
-            let shape = numpy_arr.shape().to_vec();
-            let data: Vec<f64> = numpy_arr.as_slice()?.to_vec();
-            Ok(PyArray {
-                inner: ArrayData::Float(NdArray::from_vec(Shape::new(shape), data)),
-                alive: true
-            })
+            let numpy_arr = arr.cast::<PyArrayDyn<f64>>()
+                .map_err(|_| PyTypeError::new_err("expected float64 numpy array"))?;
+            let readonly = numpy_arr.readonly();
+            let shape = readonly.shape().to_vec();
+
+            let inner = if readonly.is_c_contiguous() {
+                let slice = readonly.as_slice()?;
+                let owner = arr.clone().unbind();
+                unsafe { NdArray::from_external(owner, slice.as_ptr(), Shape::new(shape)) }
+            } else {
+                let data: Vec<f64> = readonly.as_array().iter().copied().collect();
+                NdArray::from_vec(Shape::new(shape), data)
+            };
+
+            Ok(PyArray { inner: ArrayData::Float(inner), alive: true })
         }
         "i" | "u" => {
-            let numpy_arr: PyReadonlyArrayDyn<i64> = arr.extract()?;
-            let shape = numpy_arr.shape().to_vec();
-            let data: Vec<i64> = numpy_arr.as_slice()?.to_vec();
-            Ok(PyArray {
-                inner: ArrayData::Int(NdArray::from_vec(Shape::new(shape), data)), alive: true,
-            })
+            let numpy_arr = arr.cast::<PyArrayDyn<i64>>()
+                .map_err(|_| PyTypeError::new_err("expected int64 numpy array"))?;
+            let readonly = numpy_arr.readonly();
+            let shape = readonly.shape().to_vec();
+
+            let inner = if readonly.is_c_contiguous() {
+                let slice = readonly.as_slice()?;
+                let owner = arr.clone().unbind();
+                unsafe { NdArray::from_external(owner, slice.as_ptr(), Shape::new(shape)) }
+            } else {
+                let data: Vec<i64> = readonly.as_array().iter().copied().collect();
+                NdArray::from_vec(Shape::new(shape), data)
+            };
+
+            Ok(PyArray { inner: ArrayData::Int(inner), alive: true })
         }
         other => Err(PyTypeError::new_err(format!(
             "unsupported numpy dtype kind: '{other}'"

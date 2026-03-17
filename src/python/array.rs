@@ -226,6 +226,11 @@ impl PyArray {
         }
     }
 
+    #[getter]
+    fn alive(&self) -> PyResult<bool> {
+        Ok(self.alive)
+    }
+
     fn get(&self, py: Python<'_>, indices: Vec<usize>) -> PyResult<Py<PyAny>> {
         check_alive!(self);
         match &self.inner {
@@ -1171,33 +1176,6 @@ impl PyArray {
         match &self.inner {
             ArrayData::Float(a) => Ok(a.as_slice_unchecked()[flat_idx].into_pyobject(py)?.into_any().unbind()),
             ArrayData::Int(a) => Ok(a.as_slice_unchecked()[flat_idx].into_pyobject(py)?.into_any().unbind()),
-        }
-    }
-
-    /// Returns the element at a multi-dimensional index as a Python scalar.
-    fn scalar_at_indices(&self, indices: &[usize], py: Python<'_>) -> PyResult<Py<PyAny>> {
-        match &self.inner {
-            ArrayData::Float(a) => {
-                let v = a.get(indices).ok_or_else(|| PyValueError::new_err("index out of bounds"))?;
-                Ok((*v).into_pyobject(py)?.into_any().unbind())
-            }
-            ArrayData::Int(a) => {
-                let v = a.get(indices).ok_or_else(|| PyValueError::new_err("index out of bounds"))?;
-                Ok((*v).into_pyobject(py)?.into_any().unbind())
-            }
-        }
-    }
-
-    /// Extracts a contiguous sub-array starting at flat offset `start` with `size` elements,
-    /// reshaped to `dims`. Used by `__getitem__` for partial-tuple indexing (e.g. `a[2]` on a 3-D array).
-    fn subarray_at(&self, dims: Vec<usize>, start: usize, size: usize) -> PyArray {
-        match &self.inner {
-            ArrayData::Float(a) => PyArray { inner: ArrayData::Float(
-                NdArray::from_vec(Shape::new(dims), a.as_slice_unchecked()[start..start + size].to_vec())
-            ), alive: true},
-            ArrayData::Int(a) => PyArray { inner: ArrayData::Int(
-                NdArray::from_vec(Shape::new(dims), a.as_slice_unchecked()[start..start + size].to_vec())
-            ), alive: true},
         }
     }
 

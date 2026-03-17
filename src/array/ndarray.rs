@@ -177,7 +177,8 @@ impl<T> NdArray<T> {
         let shape: Vec<usize> = buf.shape().iter().map(|&d| d as usize).collect();
         let len = buf.item_count();
 
-        if buf.is_c_contiguous() {
+        let is_contiguous = buf.is_c_contiguous() || buf.strides().is_empty();
+        if is_contiguous {
             let strides = Shape::new(shape.clone()).strides_row_major();
             Ok(NdArray {
                 shape: Shape::new(shape),

@@ -30,8 +30,6 @@ pub enum ArrayData {
 pub enum ArrayLike<'py> {
     Array(Bound<'py, PyArray>),
     NumPy(Bound<'py, PyUntypedArray>),
-    /// Any Python object implementing the buffer protocol (excluding numpy arrays,
-    /// which are handled above by the more specific `NumPy` variant).
     Buffer(Bound<'py, PyAny>),
     Scalar(f64),
     Vec(Vec<f64>),
@@ -51,8 +49,16 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ArrayLike<'py> {
             return Ok(ArrayLike::NumPy(arr.to_owned()));
         }
 
-        // Check the tp_as_buffer slot to detect any remaining buffer-protocol objects
-        // (e.g. `array.array`, `memoryview`, ctypes arrays, etc.).
+        //Try convert to numpy array if possible
+        if ob.hasattr("to_numpy").unwrap_or(false) {
+            let py = ob.py();
+            let np = py.import("numpy")?;
+            let arr = ob.call_method1("to_numpy", (np.getattr("float64")?,))?;
+            if let Ok(arr) = arr.cast::<PyUntypedArray>() {
+                return Ok(ArrayLike::NumPy(arr.to_owned()));
+            }
+        }
+
         if unsafe { !(*(*ob.as_ptr()).ob_type).tp_as_buffer.is_null() } {
             return Ok(ArrayLike::Buffer(ob.to_owned()));
         }
@@ -107,7 +113,10 @@ impl<'py> ArrayLike<'py> {
                 }
             }
             ArrayLike::Buffer(bound) => {
-                let buf = pyo3::buffer::PyBuffer::<f64>::get(&bound)?;
+                let buf = pyo3::buffer::PyBuffer::<f64>::get(&bound)
+                    .map_err(|_| PyTypeError::new_err(
+                        "buffer contents are not compatible with f64"
+                    ))?;
                 NdArray::from_buffer(bound.py(), buf)
             }
             ArrayLike::Scalar(s) => Ok(NdArray::from_vec(Shape::scalar(), vec![s])),
@@ -134,7 +143,6 @@ impl<'py> ArrayLike<'py> {
                 }
             }
             ArrayLike::NumPy(bound) => {
-                // Try i64 first, then fall back to f64 -> i64
                 if let Ok(arr) = bound.cast::<PyArrayDyn<i64>>() {
                     let readonly = arr.readonly();
                     let shape = readonly.shape().to_vec();
