@@ -141,7 +141,8 @@ class BallTree:
     def from_array(
         array: Array[float],
         leaf_size: int = 20,
-        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
+        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
+        preserve_array: bool = True
     ) -> BallTree:
         """Construct a ball tree from a 2D array of points.
 
@@ -170,7 +171,8 @@ class BallTree:
         self,
         data: ArrayLike,
         leaf_size: int = 20,
-        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
+        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
+        copy: bool = True
     ):
         """Construct a ball tree from a 2D array of points."""
         ...
@@ -250,7 +252,7 @@ class BallTree:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> float: ...
+    ) -> float | Array[float]: ...
 
     @overload
     def kernel_density(
@@ -259,7 +261,7 @@ class BallTree:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> List: ...
+    ) -> float | Array[float]: ...
 
     @overload
     def kernel_density(
@@ -268,7 +270,7 @@ class BallTree:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> List: ...
+    ) -> float | Array[float]: ...
 
 
 class KDTree:
@@ -283,7 +285,8 @@ class KDTree:
     def from_array(
         array: Array[float],
         leaf_size: int = 20,
-        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
+        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
+        preserve_array: bool = True
     ) -> KDTree:
         """Construct a KD-tree from a 2D array of points."""
         ...
@@ -292,7 +295,8 @@ class KDTree:
         self,
         data: ArrayLike,
         leaf_size: int = 20,
-        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
+        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
+        copy: bool = True
     ):
         """Construct a KD-tree from a 2D array of points."""
         ...
@@ -332,7 +336,7 @@ class KDTree:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> float: ...
+    ) -> float | Array[float]: ...
 
     @overload
     def kernel_density(
@@ -341,7 +345,7 @@ class KDTree:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> List: ...
+    ) -> float | Array[float]: ...
 
     @overload
     def kernel_density(
@@ -350,7 +354,7 @@ class KDTree:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> List: ...
+    ) -> float | Array[float]: ...
 
 
 class VPTree:
@@ -367,7 +371,8 @@ class VPTree:
         array: Array[float],
         leaf_size: int = 20,
         metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
-        selection: Literal["first", "random", "variance"] = "variance"
+        selection: Literal["first", "random", "variance"] = "variance",
+        preserve_array: bool = True
     ) -> VPTree:
         """Construct a vantage-point tree from a 2D array of points."""
         ...
@@ -377,7 +382,8 @@ class VPTree:
         data: ArrayLike,
         leaf_size: int = 20,
         metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
-        selection: Literal["first", "random", "variance"] = "variance"
+        selection: Literal["first", "random", "variance"] = "variance",
+        copy: bool = True
     ):
         """Construct a vantage-point tree from a 2D array of points."""
         ...
@@ -413,7 +419,7 @@ class VPTree:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> float: ...
+    ) -> float | Array[float]: ...
 
     @overload
     def kernel_density(
@@ -422,7 +428,7 @@ class VPTree:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> List: ...
+    ) -> float | Array[float]: ...
 
     @overload
     def kernel_density(
@@ -431,7 +437,7 @@ class VPTree:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> List: ...
+    ) -> float | Array[float]: ...
 
 
 class RPTree:
@@ -449,6 +455,7 @@ class RPTree:
         metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
         projection: Literal["gaussian", "sparse"] = "gaussian",
         seed: Optional[int] = None,
+        preserve_array: bool = True
     ) -> RPTree:
         """Construct an RP-tree from a 2D array of points."""
         ...
@@ -460,6 +467,7 @@ class RPTree:
         metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
         projection: Literal["gaussian", "sparse"] = "gaussian",
         seed: Optional[int] = None,
+        copy: bool = True
     ):
         """Construct an RP-tree from array-like data."""
         ...
@@ -501,6 +509,7 @@ class AggTree:
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         bandwidth: float = 1.0,
         atol: float = 0.01,
+        preserve_array: bool = True
     ) -> AggTree:
         """Construct an aggregation tree from a 2D array of points."""
         ...
@@ -513,6 +522,7 @@ class AggTree:
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         bandwidth: float = 1.0,
         atol: float = 0.01,
+        copy: bool = True
     ):
         """Construct an aggregation tree from a 2D array of points."""
         ...
@@ -531,21 +541,21 @@ class AggTree:
         self,
         queries: ArrayLike,
         normalize: bool = True
-    ) -> float: ...
+    ) -> float | Array[float]: ...
 
     @overload
     def kernel_density(
         self,
         queries: ArrayLike,
         normalize: bool = True
-    ) -> List: ...
+    ) -> float | Array[float]: ...
 
     @overload
     def kernel_density(
         self,
         queries: None = None,
         normalize: bool = True
-    ) -> List: ...
+    ) -> float | Array[float]: ...
 
 
 class BruteForce:
@@ -567,7 +577,8 @@ class BruteForce:
     def __init__(
         self,
         data: Array[float],
-        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean"
+        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
+        copy: bool = True
     ):
         """Construct a BruteForce search structure from a 2D array of points."""
         ...
@@ -603,7 +614,7 @@ class BruteForce:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> float: ...
+    ) -> float | Array[float]: ...
 
     @overload
     def kernel_density(
@@ -612,7 +623,7 @@ class BruteForce:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> List: ...
+    ) -> float | Array[float]: ...
 
     @overload
     def kernel_density(
@@ -621,7 +632,7 @@ class BruteForce:
         bandwidth: float = 1.0,
         kernel: Literal["gaussian", "epanechnikov", "uniform", "triangular"] = "gaussian",
         normalize: bool = True
-    ) -> List: ...
+    ) -> float | Array[float]: ...
 
 
 class ProjectionReducer:
@@ -637,7 +648,8 @@ class ProjectionReducer:
         output_dim: int,
         projection_type: Literal["gaussian", "sparse"] = "gaussian",
         density: float = 0.1,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
+        copy: bool = True
     ) -> None:
         """Initializes a new ProjectionReducer.
 

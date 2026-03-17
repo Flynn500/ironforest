@@ -28,9 +28,6 @@ pub struct KDTree {
     pub dim: usize,
     pub leaf_size: usize,
     pub metric: DistanceMetric,
-    /// `true` after physical reorder (Owned input) — `get_point(i)` uses
-    /// `data[i]`. `false` for zero-copy (External/Strided) — `get_point(i)`
-    /// uses `data[indices[i]]` to look up the original position.
     pub data_is_reordered: bool,
 }
 
@@ -41,8 +38,6 @@ impl KDTree {
         let n_points = shape[0];
         let dim = shape[1];
 
-        // Cosine normalisation requires owned storage; non-contiguous (Strided) arrays must
-        // also be materialised because get_point() exposes data() as a flat contiguous slice.
         if (matches!(metric, DistanceMetric::Cosine) && !data.is_owned()) || !data.is_contiguous() {
             data = data.to_contiguous();
         }

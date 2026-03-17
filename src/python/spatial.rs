@@ -354,6 +354,7 @@ macro_rules! impl_knn_query {
     ($py_type:ty) => {
         #[pymethods]
         impl $py_type {
+            #[pyo3(signature = (query, k))]
             fn query_knn(&self, query: ArrayLike, k: usize) -> PyResult<PySpatialResult> {
                 let is_batch = query.ndim() == 2;
                 let queries_arr = query.into_spatial_query_ndarray(tree!(self).dim)?;
@@ -410,6 +411,7 @@ macro_rules! impl_radius_query {
     ($py_type:ty) => {
         #[pymethods]
         impl $py_type {
+            #[pyo3(signature = (query, radius))]
             fn query_radius(&self, query: ArrayLike, radius: f64) -> PyResult<PySpatialResult> {
                 let is_batch = query.ndim() == 2;
                 let queries_arr = query.into_spatial_query_ndarray(tree!(self).dim)?;
@@ -442,6 +444,7 @@ macro_rules! impl_kde_query {
     ($py_type:ty) => {
         #[pymethods]
         impl $py_type {
+            #[pyo3(signature = (queries=None, bandwidth=None, kernel=None, normalize=None))]
             fn kernel_density(
                 &self,
                 py: Python<'_>,

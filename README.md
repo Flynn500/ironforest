@@ -26,8 +26,8 @@ query_point = reducer.transform(query_point)
 result = tree.query_knn(query_point, k=k)
 
 #k nearest neighbours
-for output_idx, original_idx in enumerate(result.indices):
-    print(f"index: {original_idx}, dist: {result.distances[output_idx]}")
+for result_idx, original_idx in enumerate(result.indices):
+    print(f"index: {original_idx}, dist: {result.distances[result_idx]}")
 
 #print mean, meadian and max distances
 print(f"{result.mean():.2f}, {result.median():.2f}, {result.radius():.2f}")
@@ -35,21 +35,23 @@ print(f"{result.mean():.2f}, {result.median():.2f}, {result.radius():.2f}")
 
 ## Installation
 
-`pip install ironforest`
+From PyPi: `pip install ironforest`
 
-You can also build with `maturin build --release` assuming maturin is installed.
+You can also build with `maturin build --release` assuming maturin is and rust are installed.
 
 ## Status
 
 The main things I need to finish before 1.0 are improving compatibility with the wider python ecosystem and improving the robustness of my algorithms. Main goals are:
-- Adding buffer protocols
-- Integration with pandas and polars
+- Adding buffer protocols (DONE)
+- Integration with pandas and polars (DONE)
+- f16 & f32 intergration
+- NaN handling
 - Spatial & RPForest objects
 
 I'd also like to highlight the fact that before 1.0, serialization will not be gauranteed across versions. This is because the underlying trees are still going through a fair amount of iteration as we are still in the early stages of this library. 
 
 ## Spatial
-Spatial trees support kNN, radius, and KDE queries. All spatial trees support serialization via `save()` & `load()`, alternatively you can use pickle.
+Spatial trees support kNN, radius, and KDE queries. All spatial trees support serialization via `save()` & `load()`, alternatively you can use pickle. Trees can be constructed and queried with our own array, numpy, pandas or polars. Anything that implements the python buffer protocol should be a valid input, although f64 values are only accepted at this point and NaN and non numeric types are not handled.
 
 - KDTree - axis-aligned splits, best for low-to-moderate dimensions
 - BallTree - pivot-based splits, handles higher dimensions well
@@ -95,7 +97,7 @@ These modules are not the primary focus of the library but we still expose them 
 ### Array
 - An N-dimensional array object with broadcasting
 - Matrix operations & constructors
-- Numpy interoperability via `to_numpy()` & `from_numpy()`
+- Zero copy interop with contigious numpy arrays via `to_numpy()` & `from_numpy()`
 
 ### NdUtils
 - Array constructors
