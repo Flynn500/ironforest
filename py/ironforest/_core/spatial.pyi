@@ -177,6 +177,11 @@ class BallTree:
         """Construct a ball tree from a 2D array of points."""
         ...
 
+    @property
+    def dtype(self) -> str:
+        """The floating point precision of the tree ('float32' or 'float64')."""
+        ...
+
     def query_radius(self, query: ArrayLike, radius: float) -> SpatialResult:
         """Find all points within a given radius of the query point.
 
@@ -301,6 +306,11 @@ class KDTree:
         """Construct a KD-tree from a 2D array of points."""
         ...
 
+    @property
+    def dtype(self) -> str:
+        """The floating point precision of the tree ('float32' or 'float64')."""
+        ...
+
     def query_radius(self, query: ArrayLike, radius: float) -> SpatialResult:
         """Find all points within a given radius of the query point."""
         ...
@@ -388,6 +398,11 @@ class VPTree:
         """Construct a vantage-point tree from a 2D array of points."""
         ...
 
+    @property
+    def dtype(self) -> str:
+        """The floating point precision of the tree ('float32' or 'float64')."""
+        ...
+
     def query_radius(self, query: ArrayLike, radius: float) -> SpatialResult:
         """Find all points within a given radius of the query point."""
         ...
@@ -472,6 +487,11 @@ class RPTree:
         """Construct an RP-tree from array-like data."""
         ...
 
+    @property
+    def dtype(self) -> str:
+        """The floating point precision of the tree ('float32' or 'float64')."""
+        ...
+
     def query_radius(self, query: ArrayLike, radius: float) -> SpatialResult:
         """Find all points within a given radius of the query point."""
         ...
@@ -525,6 +545,11 @@ class AggTree:
         copy: bool = True
     ):
         """Construct an aggregation tree from a 2D array of points."""
+        ...
+
+    @property
+    def dtype(self) -> str:
+        """The floating point precision of the tree ('float32' or 'float64')."""
         ...
 
     def save(self, path: str) -> None:
@@ -581,6 +606,11 @@ class BruteForce:
         copy: bool = True
     ):
         """Construct a BruteForce search structure from a 2D array of points."""
+        ...
+
+    @property
+    def dtype(self) -> str:
+        """The floating point precision of the tree ('float32' or 'float64')."""
         ...
 
     def query_radius(self, query: ArrayLike, radius: float) -> SpatialResult:

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 const KNN_PAR_THRESHOLD: usize = 512;
 
 // RPNode stores the split value and projection direction in f64 regardless of
-// the tree's data type. Projections are fundamentally f64 computations.
+// the tree's data type. Projections are fundamentally f64 computations currently.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RPNode {
     pub start: usize,

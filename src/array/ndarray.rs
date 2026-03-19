@@ -233,7 +233,6 @@ impl<T: Copy> NdArray<T> {
             let start = i * self.strides[0];
             Cow::Borrowed(&self.storage.as_slice_unchecked()[start..start + self.strides[0]])
         } else {
-            // Strided: copy the row into an owned Vec.
             let ncols = self.shape.dims()[1];
             let row_start = i * self.strides[0];
             let mut row = Vec::with_capacity(ncols);

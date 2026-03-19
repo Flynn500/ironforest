@@ -3,7 +3,6 @@ use std::cmp::Reverse;
 use crate::{array::NdArray, spatial::HeapItem};
 use rayon::prelude::*;
 use crate::spatial::SpatialTree;
-use num_traits::float::Float as _;
 use num_traits::identities::Zero as _;
 
 const ANN_PAR_THRESHOLD: usize = 512;

@@ -7,7 +7,6 @@ use crate::array::{NdArray, Shape};
 
 /// Validates that `v` is a non-empty, rectangular 2-D nested list.
 /// Returns `(rows, cols)` on success, or a `PyValueError` if the list is empty
-/// or has rows of inconsistent length.
 fn validate_vec2d<T>(v: &[Vec<T>]) -> PyResult<(usize, usize)> {
     if v.is_empty() {
         return Err(PyValueError::new_err("Cannot create array from empty nested list"));
@@ -210,6 +209,13 @@ impl<'py> ArrayLike<'py> {
         }
     }
 
+    pub fn is_f32(&self) -> bool {
+        match self {
+            ArrayLike::NumPy(bound) => bound.cast::<PyArrayDyn<f32>>().is_ok(),
+            _ => false,
+        }
+    }
+
     pub fn is_int(&self) -> bool {
         match self {
             ArrayLike::Array(bound) => {
@@ -409,9 +415,7 @@ impl PyArray {
     }
 
     /// Moves the inner `NdArray<f64>` out of this `PyArray`, marks it dead, and
-    /// returns ownership to the caller.  The caller is expected to call
-    /// `.to_contiguous()` on the result when `Owned` storage is required (e.g.
-    /// for tree construction with reordering).
+    /// returns ownership to the caller.
     pub fn take_float(&mut self) -> PyResult<NdArray<f64>> {
         check_alive!(self);
         if matches!(self.inner, ArrayData::Int(_)) {
