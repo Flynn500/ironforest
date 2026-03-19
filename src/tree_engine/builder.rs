@@ -1,5 +1,5 @@
 use crate::projection::{ProjectionType, RandomProjection};
-use crate::tree_engine::config::{SplitCriterion, SplitResult, TaskType, TreeConfig};
+use crate::tree_engine::config::{SplitCriterion, SplitGeometry, SplitResult, TaskType, TreeConfig};
 use crate::tree_engine::impurity;
 use crate::tree_engine::node::{Node, SplitType};
 use crate::tree_engine::tree::Tree;
@@ -37,10 +37,14 @@ impl<'a> TreeBuilder<'a> {
     }
 
     pub fn build(&mut self) -> Tree {
+        let indices = (0..self.n_samples).collect();
+        self.build_with_indices(indices)
+    }
+
+    pub fn build_with_indices(&mut self, initial_indices: Vec<usize>) -> Tree {
         let mut tree = Tree::new(self.n_features, self.config.task_type);
-        tree.n_training_samples = self.n_samples;
-        let indices: Vec<usize> = (0..self.n_samples).collect();
-        self.build_node(&mut tree, &indices, 0);
+        tree.n_training_samples = initial_indices.len();
+        self.build_node(&mut tree, &initial_indices, 0);
         tree
     }
 
@@ -70,10 +74,12 @@ impl<'a> TreeBuilder<'a> {
             return tree.add_node(self.make_leaf(indices));
         }
 
-        let split = match self.config.criterion {
-            SplitCriterion::Random => self.find_random_split(indices),
-            SplitCriterion::RandomProjection => self.find_spatial_split(indices),
-            _ => self.find_best_split(indices),
+        let split = match self.config.split_geometry {
+            SplitGeometry::RandomProjection => self.find_spatial_split(indices),
+            SplitGeometry::Axis => match self.config.criterion {
+                SplitCriterion::Random => self.find_random_split(indices),
+                _ => self.find_best_split(indices),
+            },
         };
 
         let split = match split {

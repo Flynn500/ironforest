@@ -17,4 +17,4 @@ dist/
 build/
 .venv/
 .hdf5
-tests/sift-128-euclidean.hdf5
+benchmarks/sift-128-euclidean.hdf5

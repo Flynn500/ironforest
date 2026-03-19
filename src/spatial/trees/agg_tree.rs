@@ -1,13 +1,15 @@
-use crate::{KernelType, Shape, array::NdArray, spatial::common::DistanceMetric};
+use crate::{KernelType, Shape, array::NdArray, spatial::common::{DistanceMetric, IronFloat}};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 const KDE_PAR_THRESHOLD: usize = 512;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AggNode {
-    pub center: Vec<f64>,
-    pub radius: f64,
+#[serde(bound = "T: IronFloat")]
+pub struct AggNode<T> {
+    pub center: Vec<T>,
+    pub radius: T,
+    // Higher-order moments stored in f64 for kernel computation precision
     pub variance: f64,
     pub moment3: f64,
     pub moment4: f64,
@@ -20,10 +22,11 @@ pub struct AggNode {
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AggTree {
-    pub nodes: Vec<AggNode>,
+#[serde(bound = "T: IronFloat")]
+pub struct AggTree<T: IronFloat> {
+    pub nodes: Vec<AggNode<T>>,
     pub indices: Vec<usize>,
-    pub data: NdArray<f64>,
+    pub data: NdArray<T>,
     pub n_points: usize,
     pub dim: usize,
     pub leaf_size: usize,
@@ -33,9 +36,9 @@ pub struct AggTree {
     pub atol: f64,
 }
 
-impl AggTree {
+impl<T: IronFloat> AggTree<T> {
     pub fn new(
-        mut data: NdArray<f64>, leaf_size: usize,metric: DistanceMetric, 
+        mut data: NdArray<T>, leaf_size: usize, metric: DistanceMetric,
         kernel: KernelType, bandwidth: f64, atol: f64,
     ) -> Self {
         let shape = data.shape().dims();
@@ -43,6 +46,9 @@ impl AggTree {
         let n_points = shape[0];
         let dim = shape[1];
 
+        if !data.is_owned() {
+            data = data.to_contiguous();
+        }
         if matches!(metric, DistanceMetric::Cosine) {
             for i in 0..n_points {
                 let normed = metric.pre_transform(data.row(i)).into_owned();
@@ -53,7 +59,7 @@ impl AggTree {
         let mut tree = AggTree {
             nodes: Vec::new(),
             indices: (0..n_points).collect(),
-            data: data,
+            data,
             n_points,
             dim,
             leaf_size,
@@ -73,9 +79,9 @@ impl AggTree {
 
         tree
     }
-    
+
     fn reorder_data(&mut self) {
-        let mut new_data = vec![0.0; self.data.len()];
+        let mut new_data = vec![T::zero(); self.data.len()];
 
         for (new_idx, &old_idx) in self.indices.iter().enumerate() {
             let dst = new_idx * self.dim;
@@ -103,7 +109,7 @@ impl AggTree {
     }
 
     fn compact_data(&mut self, live: &[(usize, usize)]) -> Vec<usize> {
-        let mut new_data = Vec::new();
+        let mut new_data: Vec<T> = Vec::new();
         let mut remap = vec![usize::MAX; self.n_points];
         let mut new_idx = 0;
 
@@ -132,45 +138,47 @@ impl AggTree {
         }
     }
 
-    fn init_node(&self, start: usize, end: usize) -> (Vec<f64>, f64, f64, f64, f64) {
-        let n = (end - start) as f64;
-        let mut centroid = vec![0.0; self.dim];
+    fn init_node(&self, start: usize, end: usize) -> (Vec<T>, T, f64, f64, f64) {
+        let n: T = T::from(end - start).unwrap();
+        let n_f64 = (end - start) as f64;
+        let mut centroid = vec![T::zero(); self.dim];
 
         for i in start..end {
             let p = self.data.row(i);
             for (j, &x) in p.iter().enumerate() {
-                centroid[j] += x;
+                centroid[j] = centroid[j] + x;
             }
         }
 
         for c in &mut centroid {
-            *c /= n;
+            *c = *c / n;
         }
 
-        let mut max_dist: f64 = 0.0;
-        let mut variance = 0.0;
-        let mut moment3 = 0.0;
-        let mut moment4 = 0.0;
+        let mut max_dist = T::zero();
+        let mut variance = 0.0f64;
+        let mut moment3 = 0.0f64;
+        let mut moment4 = 0.0f64;
 
         for i in start..end {
             let p = self.data.row(i);
-            let dist = self.metric.post_transform(self.metric.reduced_distance(p, &centroid));
+            let dist: T = self.metric.post_transform(self.metric.reduced_distance(p, &centroid));
             if dist > max_dist { max_dist = dist; }
-            let d2 = dist * dist;
+            let dist_f64 = dist.to_f64().unwrap();
+            let d2 = dist_f64 * dist_f64;
             variance += d2;
-            moment3 += d2 * dist;
+            moment3 += d2 * dist_f64;
             moment4 += d2 * d2;
         }
 
-        variance /= n;
-        moment3 /= n;
-        moment4 /= n;
+        variance /= n_f64;
+        moment3 /= n_f64;
+        moment4 /= n_f64;
 
         (centroid, max_dist, variance, moment3, moment4)
     }
 
 
-    fn furthest_from(&self, query: &[f64], start: usize, end: usize) -> usize {
+    fn furthest_from(&self, query: &[T], start: usize, end: usize) -> usize {
         (start..end)
             .max_by(|&a, &b| {
                 let da = self.metric.post_transform(self.metric.reduced_distance(query, self.data.row(a)));
@@ -180,19 +188,19 @@ impl AggTree {
             .unwrap()
     }
 
-    fn pivot_partition(&mut self, start: usize, end: usize, centroid: &[f64]) -> usize {
-        let p1_slot = self.furthest_from(&centroid, start, end);
+    fn pivot_partition(&mut self, start: usize, end: usize, centroid: &[T]) -> usize {
+        let p1_slot = self.furthest_from(centroid, start, end);
         let p1 = self.data.row(p1_slot).to_vec();
 
         let p2_slot = self.furthest_from(&p1, start, end);
         let p2 = self.data.row(p2_slot).to_vec();
 
-        let axis: Vec<f64> = p2.iter().zip(&p1).map(|(a, b)| a - b).collect();
+        let axis: Vec<T> = p2.iter().zip(&p1).map(|(a, b)| *a - *b).collect();
 
-        let mut projections: Vec<(f64, usize)> = (start..end)
+        let mut projections: Vec<(T, usize)> = (start..end)
             .map(|i| {
                 let p = self.data.row(i);
-                let proj = p.iter().zip(&axis).map(|(x, a)| x * a).sum::<f64>();
+                let proj: T = p.iter().zip(&axis).map(|(x, a)| *x * *a).sum();
                 (proj, self.indices[i])
             })
             .collect();
@@ -213,8 +221,9 @@ impl AggTree {
     fn build_recursive(&mut self, start: usize, end: usize) -> usize {
         let (center, radius, variance, moment3, moment4) = self.init_node(start, end);
         let n = (end - start) as f64;
+        let radius_f64 = radius.to_f64().unwrap();
 
-        let max_abs_error = self.kernel.node_error_bound(n, radius, self.bandwidth);
+        let max_abs_error = self.kernel.node_error_bound(n, radius_f64, self.bandwidth);
         let mut mid = self.pivot_partition(start, end, &center);
 
         let node_idx = self.nodes.len();
@@ -248,15 +257,15 @@ impl AggTree {
         node_idx
     }
 
-    fn min_distance_to_node(&self, node_idx: usize, query: &[f64]) -> f64 {
+    fn min_distance_to_node_inner(&self, node_idx: usize, query: &[T]) -> f64 {
         let node = &self.nodes[node_idx];
         let d = self.metric.post_transform(self.metric.reduced_distance(query, &node.center));
-        (d - node.radius).max(0.0)
+        (d - node.radius).max(T::zero()).to_f64().unwrap()
     }
 
-    fn approx_kde_for_node(&self, query: &[f64], node: &AggNode, h: f64, kernel: KernelType) -> f64 {
+    fn approx_kde_for_node(&self, query: &[T], node: &AggNode<T>, h: f64, kernel: KernelType) -> f64 {
         let n = (node.end - node.start) as f64;
-        let r_c = self.metric.post_transform(self.metric.reduced_distance(query, &node.center));
+        let r_c: f64 = self.metric.post_transform(self.metric.reduced_distance(query, &node.center)).to_f64().unwrap();
 
         let k0 = kernel.evaluate(r_c, h);
         let k2 = kernel.evaluate_second_derivative(r_c, h);
@@ -266,7 +275,7 @@ impl AggTree {
         n * (k0 + 0.5 * k2 * node.variance + (1.0 / 6.0) * k3 * node.moment3 + (1.0 / 24.0) * k4 * node.moment4)
     }
 
-    fn kde_recursive(&self, node_idx: usize, query: &[f64], h: f64, density: &mut f64, kernel: KernelType) {
+    fn kde_recursive(&self, node_idx: usize, query: &[T], h: f64, density: &mut f64, kernel: KernelType) {
         let node = &self.nodes[node_idx];
 
         if node.left.is_none() {
@@ -274,14 +283,14 @@ impl AggTree {
                 *density += self.approx_kde_for_node(query, node, h, kernel);
             } else {
                 for i in node.start..node.end {
-                    let dist = self.metric.post_transform(self.metric.reduced_distance(query, self.data.row(i)));
+                    let dist: f64 = self.metric.post_transform(self.metric.reduced_distance(query, self.data.row(i))).to_f64().unwrap();
                     *density += kernel.evaluate(dist, h);
                 }
             }
             return;
         }
         let n = (self.nodes[node_idx].end - self.nodes[node_idx].start) as f64;
-        let transformed_dist = self.metric.post_transform(self.min_distance_to_node(node_idx, query));
+        let transformed_dist = self.min_distance_to_node_inner(node_idx, query);
         if kernel.evaluate(transformed_dist, h) * n < 1e-10 {
             return;
         }
@@ -294,11 +303,11 @@ impl AggTree {
         }
     }
 
-    fn seq_kde_recursion(&self, kernel: KernelType, bandwidth: f64, queries: &NdArray<f64>, n_queries: usize, dim: usize) -> Vec<f64>{
+    fn seq_kde_recursion(&self, kernel: KernelType, bandwidth: f64, queries: &[T], n_queries: usize, dim: usize) -> Vec<f64> {
         let mut results = vec![0.0; n_queries];
 
         for i in 0..n_queries {
-            let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+            let query = &queries[i * dim..(i + 1) * dim];
             let mut density = 0.0;
             self.kde_recursive(0, query, bandwidth, &mut density, kernel);
             results[i] = density;
@@ -306,11 +315,11 @@ impl AggTree {
         results
     }
 
-    fn par_kde_recursion(&self, kernel: KernelType, bandwidth: f64, queries: &NdArray<f64>, n_queries: usize, dim: usize) -> Vec<f64>{
+    fn par_kde_recursion(&self, kernel: KernelType, bandwidth: f64, queries: &[T], n_queries: usize, dim: usize) -> Vec<f64> {
         let results: Vec<f64> = (0..n_queries)
             .into_par_iter()
             .map(|i| {
-                let query = &queries.as_slice()[i * dim..(i + 1) * dim];
+                let query = &queries[i * dim..(i + 1) * dim];
                 let mut density = 0.0;
                 self.kde_recursive(0, query, bandwidth, &mut density, kernel);
                 density
@@ -319,7 +328,7 @@ impl AggTree {
         results
     }
 
-    pub fn kernel_density(&self, queries: &NdArray<f64>, normalize: bool) -> NdArray<f64> {
+    pub fn kernel_density(&self, queries: &NdArray<T>, normalize: bool) -> NdArray<f64> {
         let shape = queries.shape().dims();
         assert!(shape.len() == 2, "Expected 2D array (n_queries, dim)");
 
@@ -327,10 +336,12 @@ impl AggTree {
         let dim = shape[1];
         assert_eq!(dim, self.dim, "Query dimension must match tree dimension");
 
+        let queries_cow = queries.as_contiguous_slice();
+        let queries_slice: &[T] = &queries_cow;
         let mut results = if n_queries >= KDE_PAR_THRESHOLD {
-            self.par_kde_recursion(self.kernel, self.bandwidth, queries, n_queries, dim)
+            self.par_kde_recursion(self.kernel, self.bandwidth, queries_slice, n_queries, dim)
         } else {
-            self.seq_kde_recursion(self.kernel, self.bandwidth, queries, n_queries, dim)
+            self.seq_kde_recursion(self.kernel, self.bandwidth, queries_slice, n_queries, dim)
         };
 
         if normalize {

@@ -60,7 +60,7 @@ impl PyGenerator {
 
     fn randint(&mut self, low: i64, high: i64, shape: Vec<usize>) -> PyArray {
         let arr = self.inner.randint(low, high, Shape::new(shape.clone()));
-        let data: Vec<f64> = arr.as_slice().iter().map(|&x| x as f64).collect();
+        let data: Vec<f64> = arr.as_slice_unchecked().iter().map(|&x| x as f64).collect();
         PyArray {
             inner: ArrayData::Float(NdArray::from_vec(Shape::new(shape), data)),
             alive: true

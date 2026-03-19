@@ -1,18 +1,15 @@
 [package]
 name = "ironforest"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2024"
 
 [lib]
 name = "_core"
 crate-type = ["cdylib", "rlib"]
 
-[[bin]]
-name = "playground"
-path = "src/bin/playground.rs"
 
 [dependencies]
-pyo3 = "0.27.2"
+pyo3 = { version = "0.27.2", features = ["multiple-pymethods"] }
 numpy = "0.27"
 rayon = "1.10"
 serde = {version = "1.0.228", features = ["derive"]}

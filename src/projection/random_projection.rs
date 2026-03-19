@@ -1,6 +1,7 @@
 use crate::array::{NdArray, Shape};
 use crate::linalg::basic::simd_dot;
 use crate::random::Generator;
+use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -18,10 +19,21 @@ pub enum ProjectionDirection {
 }
 
 impl ProjectionDirection {
+    /// Optimised projection for f64 slices (uses SIMD internally).
     pub fn project(&self, point: &[f64]) -> f64 {
         match self {
             Self::Dense(v) => simd_dot(point, v),
             Self::Sparse(sv) => sv.dot(point),
+            Self::Empty => 0.0,
+        }
+    }
+
+    /// Generic projection for any numeric slice (converts to f64 scalar).
+    /// Used by RPTree<f32> and other non-f64 trees.
+    pub fn project_t<F: ToPrimitive + Copy>(&self, point: &[F]) -> f64 {
+        match self {
+            Self::Dense(v) => point.iter().zip(v).map(|(x, a)| x.to_f64().unwrap() * a).sum(),
+            Self::Sparse(sv) => sv.dot_t(point),
             Self::Empty => 0.0,
         }
     }
@@ -40,6 +52,14 @@ impl SparseVector {
         self.indices.iter()
             .zip(&self.values)
             .map(|(&i, &v)| v * dense[i])
+            .sum()
+    }
+
+    pub fn dot_t<F: ToPrimitive + Copy>(&self, dense: &[F]) -> f64 {
+        debug_assert!(self.dim <= dense.len());
+        self.indices.iter()
+            .zip(&self.values)
+            .map(|(&i, &v)| v * dense[i].to_f64().unwrap())
             .sum()
     }
 }
@@ -81,7 +101,7 @@ impl RandomProjection {
         match projection_type {
             ProjectionType::Gaussian => {
                 let raw = rng.standard_normal(Shape::d1(dim));
-                let slice = raw.as_slice();
+                let slice = raw.as_slice_unchecked();
                 let norm: f64 = slice.iter().map(|x| x * x).sum::<f64>().sqrt();
                 ProjectionDirection::Dense(slice.iter().map(|x| x / norm).collect())
             }
@@ -136,11 +156,11 @@ impl RandomProjection {
 
         let col = NdArray::from_vec(Shape::new(vec![dim, 1]), vector.to_vec());
         let result = data.dot(&col);
-        result.as_slice().to_vec()
+        result.as_slice_unchecked().to_vec()
     }
 
-    pub fn rp_split(
-        data: &NdArray<f64>,
+    pub fn rp_split<F: ToPrimitive + Copy>(
+        data: &NdArray<F>,
         indices: &mut [usize],
         start: usize,
         end: usize,
@@ -153,7 +173,7 @@ impl RandomProjection {
         let mut indexed: Vec<(f64, usize)> = (start..end)
             .map(|i| {
                 let row = data.row(indices[i]);
-                let proj = direction.project(row);
+                let proj = direction.project_t(row);
                 (proj, indices[i])
             })
             .collect();

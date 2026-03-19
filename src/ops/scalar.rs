@@ -148,7 +148,7 @@ where
     T: Copy,
     F: Fn(T, T) -> T,
 {
-    let result: Vec<T> = arr.as_slice().iter().map(|&a| op(a, scalar)).collect();
+    let result: Vec<T> = arr.iter_logical().map(|a| op(a, scalar)).collect();
     NdArray::new(arr.shape().clone(), Storage::from_vec(result))
 }
 
@@ -157,7 +157,8 @@ where
     T: Copy,
     F: Fn(T, T) -> T,
 {
-    for elem in arr.as_mut_slice() {
+    // arr is always Owned here (consumed by value).
+    for elem in arr.as_mut_slice().expect("scalar_op_inplace: arr must be owned") {
         *elem = op(*elem, scalar);
     }
     arr
@@ -168,7 +169,7 @@ where
     T: Copy,
     F: Fn(T, T) -> T,
 {
-    let result: Vec<T> = arr.as_slice().iter().map(|&a| op(scalar, a)).collect();
+    let result: Vec<T> = arr.iter_logical().map(|a| op(scalar, a)).collect();
     NdArray::new(arr.shape().clone(), Storage::from_vec(result))
 }
 
@@ -177,7 +178,7 @@ where
     T: Copy,
     F: Fn(T, T) -> T,
 {
-    for elem in arr.as_mut_slice() {
+    for elem in arr.as_mut_slice().expect("scalar_op_inplace_rev: arr must be owned") {
         *elem = op(scalar, *elem);
     }
     arr

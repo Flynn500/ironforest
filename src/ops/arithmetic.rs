@@ -61,12 +61,17 @@ where
     T: Copy,
     F: Fn(T, T) -> T,
 {
+    // Materialise any Strided inputs to contiguous; no-op for Owned/External.
+    let a_c; let b_c;
+    let a = if a.is_contiguous() { a } else { a_c = a.to_contiguous(); &a_c };
+    let b = if b.is_contiguous() { b } else { b_c = b.to_contiguous(); &b_c };
+
     let iter = BroadcastIter::new(a.shape(), b.shape())
         .expect("Shapes are not broadcast-compatible");
 
     let output_shape = iter.output_shape().clone();
-    let a_data = a.as_slice();
-    let b_data = b.as_slice();
+    let a_data = a.as_slice_unchecked();
+    let b_data = b.as_slice_unchecked();
 
     let result_data: Vec<T> = iter
         .map(|(idx_a, idx_b)| op(a_data[idx_a], b_data[idx_b]))
@@ -81,8 +86,10 @@ where
     F: Fn(T, T) -> T,
 {
     if a.shape() == b.shape() {
-        let a_data = a.as_mut_slice();
-        let b_data = b.as_slice();
+        let b_c;
+        let b = if b.is_contiguous() { b } else { b_c = b.to_contiguous(); &b_c };
+        let b_data = b.as_slice_unchecked();
+        let a_data = a.as_mut_slice().expect("binary_op_inplace: a must be owned");
         for i in 0..a_data.len() {
             a_data[i] = op(a_data[i], b_data[i]);
         }
@@ -98,8 +105,10 @@ where
     F: Fn(T, T) -> T,
 {
     if a.shape() == b.shape() {
-        let a_data = a.as_mut_slice();
-        let b_data = b.as_slice();
+        let b_c;
+        let b = if b.is_contiguous() { b } else { b_c = b.to_contiguous(); &b_c };
+        let b_data = b.as_slice_unchecked();
+        let a_data = a.as_mut_slice().expect("binary_op_inplace_rev: a must be owned");
         for i in 0..a_data.len() {
             a_data[i] = op(b_data[i], a_data[i]);
         }

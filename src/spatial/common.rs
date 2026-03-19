@@ -1,18 +1,20 @@
-use std::{cmp::Ordering};
+use std::cmp::Ordering;
 use crate::stats::special::gamma;
 use serde::{Deserialize, Serialize};
-#[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::*;
 use std::borrow::Cow;
+pub use crate::iron_float::IronFloat;
 
-//normalzie for cosine
-#[inline]
-fn normalize(a: &[f64]) -> Vec<f64> {
-    let norm = a.iter().map(|x| x * x).sum::<f64>().sqrt();
-    if norm == 0.0 {
+// =============================================================================
+// Cosine normalization (generic)
+// =============================================================================
+
+fn normalize<T: IronFloat>(a: &[T]) -> Vec<T> {
+    let norm: T = a.iter().map(|x| *x * *x).sum::<T>();
+    let norm = norm.sqrt();
+    if norm == T::zero() {
         a.to_vec()
     } else {
-        a.iter().map(|x| x / norm).collect()
+        a.iter().map(|x| *x / norm).collect()
     }
 }
 
@@ -25,194 +27,72 @@ pub enum DistanceMetric {
 }
 
 impl DistanceMetric {
-    //function applied to data before tree construnction (just normalizing  for cosine currently)
+    /// Applied to data before tree construction (normalises for Cosine).
     #[inline]
-    pub fn pre_transform<'a>(self, a: &'a [f64]) -> Cow<'a, [f64]> {
+    pub fn pre_transform<'a, T: IronFloat>(self, a: &'a [T]) -> Cow<'a, [T]> {
         match self {
             DistanceMetric::Cosine => Cow::Owned(normalize(a)),
             _ => Cow::Borrowed(a),
         }
     }
 
-    //pre transform for radius queries as caller gives distance directly
+    /// Convert a true radius to its reduced-space equivalent.
     #[inline]
-    pub fn pre_transform_radius(self, radius: f64) -> f64 {
+    pub fn to_reduced<T: IronFloat>(self, radius: T) -> T {
         match self {
             DistanceMetric::Euclidean => radius * radius,
             _ => radius,
         }
     }
 
-
-    //reduced distance function for in tree calculations
+    /// Reduced (cheaper) distance used for in-tree comparisons.
     #[inline]
-    pub fn reduced_distance(self, a: &[f64], b: &[f64]) -> f64 {
+    pub fn reduced_distance<T: IronFloat>(self, a: &[T], b: &[T]) -> T {
         debug_assert_eq!(a.len(), b.len());
         match self {
-            DistanceMetric::Euclidean => squared_euclidean(a, b),
+            DistanceMetric::Euclidean => T::squared_euclidean_slice(a, b),
             DistanceMetric::Manhattan => manhattan(a, b),
             DistanceMetric::Chebyshev => chebyshev(a, b),
-            DistanceMetric::Cosine => squared_euclidean(a, b),
+            DistanceMetric::Cosine => T::squared_euclidean_slice(a, b),
         }
     }
 
-    //distance function for in tree calculations
+    /// True distance (used for output and non-reduced tree traversal).
     #[inline]
-    pub fn distance(self, a: &[f64], b: &[f64]) -> f64 {
+    pub fn distance<T: IronFloat>(self, a: &[T], b: &[T]) -> T {
         debug_assert_eq!(a.len(), b.len());
         match self {
-            DistanceMetric::Euclidean => euclidean(a, b),
+            DistanceMetric::Euclidean => self.reduced_distance(a, b).sqrt(),
             DistanceMetric::Manhattan => manhattan(a, b),
             DistanceMetric::Chebyshev => chebyshev(a, b),
-            DistanceMetric::Cosine => euclidean(a, b),
+            DistanceMetric::Cosine => self.reduced_distance(a, b).sqrt(),
         }
     }
 
-    //transforms data from reduced function values to true distance values
+    /// Convert a reduced-space distance back to the true distance.
     #[inline]
-    pub fn post_transform(self, dist: f64) -> f64 {
+    pub fn post_transform<T: IronFloat>(self, dist: T) -> T {
         match self {
             DistanceMetric::Euclidean => dist.sqrt(),
-            DistanceMetric::Cosine => dist / 2.0,
+            DistanceMetric::Cosine => dist / (T::one() + T::one()),
             _ => dist,
         }
     }
 }
 
 
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx2,fma")]
-unsafe fn squared_euclidean_single_acc(a: &[f64], b: &[f64]) -> f64 {
-    let n = a.len();
-    let chunks = n / 4;
-    let remainder = n % 4;
-
-    let mut acc = _mm256_setzero_pd();
-    let a_ptr = a.as_ptr();
-    let b_ptr = b.as_ptr();
-    unsafe {
-        for i in 0..chunks {
-            let offset = i * 4;
-            let va = _mm256_loadu_pd(a_ptr.add(offset));
-            let vb = _mm256_loadu_pd(b_ptr.add(offset));
-            let diff = _mm256_sub_pd(va, vb);
-            acc = _mm256_fmadd_pd(diff, diff, acc);
-        }
-
-        let hi = _mm256_extractf128_pd(acc, 1);
-        let lo = _mm256_castpd256_pd128(acc);
-        let sum128 = _mm_add_pd(hi, lo);
-        let upper = _mm_unpackhi_pd(sum128, sum128);
-        let mut result = _mm_cvtsd_f64(_mm_add_sd(sum128, upper));
-
-        let tail_start = chunks * 4;
-        for i in 0..remainder {
-            let d = a[tail_start + i] - b[tail_start + i];
-            result += d * d;
-        }
-
-        result
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx2,fma")]
-unsafe fn squared_euclidean_multi_acc(a: &[f64], b: &[f64]) -> f64 {
-    let n = a.len();
-    let chunks = n / 16;
-    let a_ptr = a.as_ptr();
-    let b_ptr = b.as_ptr();
-    unsafe {
-        let mut acc0 = _mm256_setzero_pd();
-        let mut acc1 = _mm256_setzero_pd();
-        let mut acc2 = _mm256_setzero_pd();
-        let mut acc3 = _mm256_setzero_pd();
-
-        for i in 0..chunks {
-            let offset = i * 16;
-
-            let d0 = _mm256_sub_pd(_mm256_loadu_pd(a_ptr.add(offset)),      _mm256_loadu_pd(b_ptr.add(offset)));
-            let d1 = _mm256_sub_pd(_mm256_loadu_pd(a_ptr.add(offset + 4)),  _mm256_loadu_pd(b_ptr.add(offset + 4)));
-            let d2 = _mm256_sub_pd(_mm256_loadu_pd(a_ptr.add(offset + 8)),  _mm256_loadu_pd(b_ptr.add(offset + 8)));
-            let d3 = _mm256_sub_pd(_mm256_loadu_pd(a_ptr.add(offset + 12)), _mm256_loadu_pd(b_ptr.add(offset + 12)));
-
-            acc0 = _mm256_fmadd_pd(d0, d0, acc0);
-            acc1 = _mm256_fmadd_pd(d1, d1, acc1);
-            acc2 = _mm256_fmadd_pd(d2, d2, acc2);
-            acc3 = _mm256_fmadd_pd(d3, d3, acc3);
-        }
-
-        acc0 = _mm256_add_pd(acc0, acc1);
-        acc2 = _mm256_add_pd(acc2, acc3);
-        acc0 = _mm256_add_pd(acc0, acc2);
-
-        let hi = _mm256_extractf128_pd(acc0, 1);
-        let lo = _mm256_castpd256_pd128(acc0);
-        let sum128 = _mm_add_pd(hi, lo);
-        let upper = _mm_unpackhi_pd(sum128, sum128);
-        let mut result = _mm_cvtsd_f64(_mm_add_sd(sum128, upper));
-
-        let tail_start = chunks * 16;
-        for i in tail_start..n {
-            let d = a[i] - b[i];
-            result += d * d;
-        }
-
-        result
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx2,fma")]
-unsafe fn simd_squared_euclidean_avx2_fma(a: &[f64], b: &[f64]) -> f64 {
-    let n = a.len();
-    unsafe {
-        if n >= 32 {
-            squared_euclidean_multi_acc(a, b)
-        } else {
-            squared_euclidean_single_acc(a, b)
-        }
-    }
-}
-
-
 #[inline]
-pub fn squared_euclidean(a: &[f64], b: &[f64]) -> f64 {
-    debug_assert_eq!(a.len(), b.len());
-
-    #[cfg(target_arch = "x86_64")]
-    {
-        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-            return unsafe { simd_squared_euclidean_avx2_fma(a, b) };
-        }
-    }
-
-    a.iter()
-        .zip(b)
-        .map(|(a, b)| {
-            let d = a - b;
-            d * d
-        })
-        .sum()
-}
-
-#[inline]
-fn euclidean(a: &[f64], b: &[f64]) -> f64 {
-    squared_euclidean(a, b).sqrt()
-}
-
-#[inline]
-fn manhattan(a: &[f64], b: &[f64]) -> f64 {
-    let mut sum = 0.0;
+fn manhattan<T: IronFloat>(a: &[T], b: &[T]) -> T {
+    let mut sum = T::zero();
     for i in 0..a.len() {
-        sum += (a[i] - b[i]).abs();
+        sum = sum + (a[i] - b[i]).abs();
     }
     sum
 }
 
 #[inline]
-fn chebyshev(a: &[f64], b: &[f64]) -> f64 {
-    let mut m: f64 = 0.0;
+fn chebyshev<T: IronFloat>(a: &[T], b: &[T]) -> T {
+    let mut m = T::zero();
     for i in 0..a.len() {
         m = m.max((a[i] - b[i]).abs());
     }
@@ -228,18 +108,21 @@ pub enum KernelType {
 }
 
 impl KernelType {
-    pub fn evaluate(&self, dist: f64, h: f64) -> f64 {
+    pub fn evaluate<T: IronFloat>(&self, dist: T, h: T) -> T {
         let u = dist / h;
+        let half = T::from(0.5).unwrap();
+        let one = T::one();
+        let zero = T::zero();
         match self {
-            KernelType::Gaussian => (-0.5 * u * u).exp(),
+            KernelType::Gaussian => (T::from(-0.5).unwrap() * u * u).exp(),
             KernelType::Epanechnikov => {
-                if u < 1.0 { 0.75 * (1.0 - u * u) } else { 0.0 }
+                if u < one { T::from(0.75).unwrap() * (one - u * u) } else { zero }
             }
             KernelType::Uniform => {
-                if u < 1.0 { 0.5 } else { 0.0 }
+                if u < one { half } else { zero }
             }
             KernelType::Triangular => {
-                if u < 1.0 { 1.0 - u } else { 0.0 }
+                if u < one { one - u } else { zero }
             }
         }
     }
@@ -255,81 +138,88 @@ impl KernelType {
         }
     }
 
-    pub fn evaluate_second_derivative(&self, r: f64, h: f64) -> f64 {
+    pub fn evaluate_second_derivative<T: IronFloat>(&self, r: T, h: T) -> T {
         let u = r / h;
+        let one = T::one();
+        let zero = T::zero();
         match self {
             KernelType::Gaussian => {
-                let k = (-0.5 * u * u).exp();
-                (u * u / (h * h) - 1.0 / (h * h)) * k
+                let k = (T::from(-0.5).unwrap() * u * u).exp();
+                (u * u / (h * h) - one / (h * h)) * k
             }
-
-            KernelType::Epanechnikov => if u < 1.0 { -1.5 / (h * h) } else { 0.0 },
-            KernelType::Triangular => 0.0,
-            KernelType::Uniform => 0.0,
+            KernelType::Epanechnikov => if u < one { T::from(-1.5).unwrap() / (h * h) } else { zero },
+            KernelType::Triangular => zero,
+            KernelType::Uniform => zero,
         }
     }
 
-    pub fn third_derivative(&self, r: f64, h: f64) -> f64 {
+    pub fn third_derivative<T: IronFloat>(&self, r: T, h: T) -> T {
         let u = r / h;
         let h3 = h * h * h;
+        let zero = T::zero();
         match self {
             KernelType::Gaussian => {
-                let k = (-0.5 * u * u).exp();
-                (3.0 * u - u * u * u) / h3 * k
+                let k = (T::from(-0.5).unwrap() * u * u).exp();
+                (T::from(3.0).unwrap() * u - u * u * u) / h3 * k
             }
-            _ => 0.0,
+            _ => zero,
         }
     }
 
-    pub fn fourth_derivative(&self, r: f64, h: f64) -> f64 {
+    pub fn fourth_derivative<T: IronFloat>(&self, r: T, h: T) -> T {
         let u = r / h;
-        let h4 = h.powi(4);
+        let h4 = h * h * h * h;
+        let zero = T::zero();
         match self {
             KernelType::Gaussian => {
-                let k = (-0.5 * u * u).exp();
-                (u.powi(4) - 6.0 * u * u + 3.0) * k / h4
+                let k = (T::from(-0.5).unwrap() * u * u).exp();
+                let u2 = u * u;
+                (u2 * u2 - T::from(6.0).unwrap() * u2 + T::from(3.0).unwrap()) * k / h4
             }
-            _ => 0.0,
+            _ => zero,
         }
     }
 
-    pub fn node_error_bound(&self, n: f64, radius: f64, h: f64) -> f64 {
+    pub fn node_error_bound<T: IronFloat>(&self, n: T, radius: T, h: T) -> T {
+        let ratio = radius / h;
         match self {
             KernelType::Gaussian => {
-                (n / 120.0) * 2.5221 * radius.powi(5) / h.powi(5)
+                let r5 = ratio * ratio * ratio * ratio * ratio;
+                (n / T::from(120.0).unwrap()) * T::from(2.5221).unwrap() * r5
             }
             KernelType::Epanechnikov => {
-                n * (radius / h) * 0.75
+                n * ratio * T::from(0.75).unwrap()
             }
             KernelType::Uniform => {
-                n * (radius / h) * 0.5
+                n * ratio * T::from(0.5).unwrap()
             }
             KernelType::Triangular => {
-                n * (radius / h) * 1.0
+                n * ratio
             }
         }
     }
 }
 
-pub struct HeapItem {
-        pub distance: f64,
-        pub index: usize,
+pub struct HeapItem<T: IronFloat> {
+    pub distance: T,
+    pub index: usize,
 }
-impl PartialEq for HeapItem {
+
+impl<T: IronFloat> PartialEq for HeapItem<T> {
     fn eq(&self, other: &Self) -> bool {
         self.distance == other.distance
     }
 }
 
-impl Eq for HeapItem {}
+impl<T: IronFloat> Eq for HeapItem<T> {}
 
-impl PartialOrd for HeapItem {
+impl<T: IronFloat> PartialOrd for HeapItem<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for HeapItem {
+impl<T: IronFloat> Ord for HeapItem<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.distance.partial_cmp(&other.distance).unwrap_or(Ordering::Equal)
     }

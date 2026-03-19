@@ -66,7 +66,7 @@ impl NdArray<f64> {
             ((-k) as usize, 0)
         };
 
-        for (i, &val) in v.as_slice().iter().enumerate() {
+        for (i, &val) in v.as_slice_unchecked().iter().enumerate() {
             *arr.get_mut(&[row_start + i, col_start + i]).unwrap() = val;
         }
         arr
@@ -79,7 +79,7 @@ impl NdArray<f64> {
         for arr in arrays {
             if arr.ndim() == 1 {
                 let n = arr.len();
-                arrays_2d.push(NdArray::from_vec(Shape::d2(n, 1), arr.as_slice().to_vec()));
+                arrays_2d.push(NdArray::from_vec(Shape::d2(n, 1), arr.as_slice_unchecked().to_vec()));
             } else if arr.ndim() == 2 {
                 arrays_2d.push((*arr).clone());
             } else {

@@ -4,10 +4,15 @@ build-backend = "maturin"
 
 [project]
 name = "ironforest"
-version = "0.5.2"
+version = "0.6.0"
 requires-python = ">=3.8"
 description = "Fast spatial queries and tree-based machine learning."
 readme = "README.md"
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with -m 'not slow')",
+]
 
 [tool.maturin]
 features = ["pyo3/extension-module", "pyo3/multiple-pymethods"]

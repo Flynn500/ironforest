@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
 use crate::{projection::ProjectionType, tree_engine::{
-    builder::TreeBuilder, config::{SplitCriterion as RustSplitCriterion, TaskType as RustTaskType, TreeConfig as RustTreeConfig}, ensemble::{Ensemble as RustEnsemble, EnsembleConfig as RustEnsembleConfig}, tree::Tree as RustTree
+    builder::TreeBuilder, config::{SplitCriterion as RustSplitCriterion, SplitGeometry as RustSplitGeometry, TaskType as RustTaskType, TreeConfig as RustTreeConfig}, ensemble::{Ensemble as RustEnsemble, EnsembleConfig as RustEnsembleConfig}, tree::Tree as RustTree
 }};
 use super::ArrayLike;
 use numpy::{PyArray1, IntoPyArray};
@@ -66,19 +66,38 @@ impl PySplitCriterion {
         PySplitCriterion { inner: RustSplitCriterion::Random }
     }
 
-    #[staticmethod]
-    fn random_projection() -> Self {
-        PySplitCriterion { inner: RustSplitCriterion::RandomProjection }
-    }
-
-
     fn __repr__(&self) -> String {
         match self.inner {
             RustSplitCriterion::Gini => "SplitCriterion.GINI".to_string(),
             RustSplitCriterion::Entropy => "SplitCriterion.ENTROPY".to_string(),
             RustSplitCriterion::Mse => "SplitCriterion.MSE".to_string(),
             RustSplitCriterion::Random => "SplitCriterion.RANDOM".to_string(),
-            RustSplitCriterion::RandomProjection => "SplitCriterion.RANDOM_PROJECTION".to_string(),
+        }
+    }
+}
+
+#[pyclass(name = "SplitGeometry")]
+#[derive(Clone, Copy)]
+pub struct PySplitGeometry {
+    inner: RustSplitGeometry,
+}
+
+#[pymethods]
+impl PySplitGeometry {
+    #[staticmethod]
+    fn axis() -> Self {
+        PySplitGeometry { inner: RustSplitGeometry::Axis }
+    }
+
+    #[staticmethod]
+    fn random_projection() -> Self {
+        PySplitGeometry { inner: RustSplitGeometry::RandomProjection }
+    }
+
+    fn __repr__(&self) -> String {
+        match self.inner {
+            RustSplitGeometry::Axis => "SplitGeometry.AXIS".to_string(),
+            RustSplitGeometry::RandomProjection => "SplitGeometry.RANDOM_PROJECTION".to_string(),
         }
     }
 }
@@ -101,6 +120,7 @@ impl PyTreeConfig {
         max_features=None,
         criterion=None,
         seed=0,
+        split_geometry=None,
         projection_type=None,
         projection_density=None,
     ))]
@@ -113,6 +133,7 @@ impl PyTreeConfig {
         max_features: Option<usize>,
         criterion: Option<PySplitCriterion>,
         seed: u64,
+        split_geometry: Option<PySplitGeometry>,
         projection_type: Option<String>,
         projection_density: Option<f64>,
     ) -> Self {
@@ -124,7 +145,9 @@ impl PyTreeConfig {
             }
         });
 
-        let projection_type = if criterion == RustSplitCriterion::RandomProjection {
+        let split_geometry = split_geometry.map(|sg| sg.inner).unwrap_or(RustSplitGeometry::Axis);
+
+        let projection_type = if split_geometry == RustSplitGeometry::RandomProjection {
             Some(match projection_type.as_deref().unwrap_or("gaussian") {
                 "sparse" => ProjectionType::Sparse(projection_density.unwrap_or(0.3)),
                 _ => ProjectionType::Gaussian,
@@ -140,6 +163,7 @@ impl PyTreeConfig {
                 min_samples_leaf,
                 max_features,
                 criterion,
+                split_geometry,
                 task_type: task_type.inner,
                 n_classes,
                 seed,
@@ -219,15 +243,26 @@ impl PyTreeConfig {
         self.inner.seed = value;
     }
 
+    #[getter]
+    fn split_geometry(&self) -> PySplitGeometry {
+        PySplitGeometry { inner: self.inner.split_geometry }
+    }
+
+    #[setter]
+    fn set_split_geometry(&mut self, value: PySplitGeometry) {
+        self.inner.split_geometry = value.inner;
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "TreeConfig(task_type={:?}, max_depth={:?}, min_samples_split={}, min_samples_leaf={}, max_features={:?}, criterion={:?}, seed={})",
+            "TreeConfig(task_type={:?}, max_depth={:?}, min_samples_split={}, min_samples_leaf={}, max_features={:?}, criterion={:?}, split_geometry={:?}, seed={})",
             self.inner.task_type,
             self.inner.max_depth,
             self.inner.min_samples_split,
             self.inner.min_samples_leaf,
             self.inner.max_features,
             self.inner.criterion,
+            self.inner.split_geometry,
             self.inner.seed
         )
     }
@@ -259,8 +294,8 @@ impl PyTree {
             )));
         }
 
-        let data_slice = data_arr.as_slice();
-        let labels_slice = labels_arr.as_slice();
+        let data_slice = data_arr.as_slice_unchecked();
+        let labels_slice = labels_arr.as_slice_unchecked();
 
         let mut builder = TreeBuilder::new(
             &config.inner,
@@ -277,7 +312,7 @@ impl PyTree {
 
     fn predict<'py>(&self, py: Python<'py>, data: ArrayLike, n_samples: usize) -> PyResult<Bound<'py, PyArray1<f64>>> {
         let data_arr = data.into_ndarray()?;
-        let data_slice = data_arr.as_slice();
+        let data_slice = data_arr.as_slice_unchecked();
 
         let predictions = self.inner.predict_values(data_slice, n_samples);
         Ok(predictions.into_pyarray(py))
@@ -285,7 +320,7 @@ impl PyTree {
 
     fn predict_anomaly_scores<'py>(&self, py: Python<'py>, data: ArrayLike, n_samples: usize) -> PyResult<Bound<'py, PyArray1<f64>>> {
         let data_arr = data.into_ndarray()?;
-        let data_slice = data_arr.as_slice();
+        let data_slice = data_arr.as_slice_unchecked();
 
         let scores = self.inner.predict_anomaly_scores(data_slice, n_samples);
         Ok(scores.into_pyarray(py))
@@ -293,7 +328,7 @@ impl PyTree {
 
     fn predict_path_lengths<'py>(&self, py: Python<'py>, data: ArrayLike, n_samples: usize) -> PyResult<Bound<'py, PyArray1<f64>>> {
         let data_arr = data.into_ndarray()?;
-        let data_slice = data_arr.as_slice();
+        let data_slice = data_arr.as_slice_unchecked();
 
         let path_lengths = self.inner.predict_path_lengths(data_slice, n_samples);
         Ok(path_lengths.into_pyarray(py))
@@ -463,8 +498,8 @@ impl PyEnsemble {
             )));
         }
 
-        let data_slice = data_arr.as_slice();
-        let labels_slice = labels_arr.as_slice();
+        let data_slice = data_arr.as_slice_unchecked();
+        let labels_slice = labels_arr.as_slice_unchecked();
 
         Ok(PyEnsemble {
             inner: RustEnsemble::fit(
@@ -479,7 +514,7 @@ impl PyEnsemble {
 
     fn predict<'py>(&self, py: Python<'py>, data: ArrayLike, n_samples: usize) -> PyResult<Bound<'py, PyArray1<f64>>> {
         let data_arr = data.into_ndarray()?;
-        let data_slice = data_arr.as_slice();
+        let data_slice = data_arr.as_slice_unchecked();
 
         let predictions = self.inner.predict(data_slice, n_samples);
         Ok(predictions.into_pyarray(py))
@@ -508,6 +543,7 @@ impl PyEnsemble {
 pub fn register_classes(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTaskType>()?;
     m.add_class::<PySplitCriterion>()?;
+    m.add_class::<PySplitGeometry>()?;
     m.add_class::<PyTreeConfig>()?;
     m.add_class::<PyTree>()?;
     m.add_class::<PyEnsembleConfig>()?;

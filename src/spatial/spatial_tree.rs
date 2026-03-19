@@ -1,12 +1,13 @@
-use crate::spatial::common::DistanceMetric;
+use crate::spatial::common::{DistanceMetric, IronFloat};
 
 pub trait SpatialTree: Sync {
     type Node;
+    type Float: IronFloat;
     const REDUCED: bool;
 
     fn nodes(&self) -> &[Self::Node];
     fn indices(&self) -> &[usize];
-    fn data(&self) -> &[f64];
+    fn data(&self) -> &[Self::Float];
     fn dim(&self) -> usize;
     fn metric(&self) -> &DistanceMetric;
 
@@ -17,21 +18,25 @@ pub trait SpatialTree: Sync {
 
     fn root(&self) -> usize { 0 }
 
-    fn min_distance_to_node(&self, node_idx: usize, query: &[f64]) -> f64;
 
-    fn knn_child_order(&self, node_idx: usize, _query: &[f64]) -> (usize, usize) {
+    fn min_distance_to_node(&self, node_idx: usize, query: &[Self::Float]) -> Self::Float;
+
+    fn knn_child_order(&self, node_idx: usize, _query: &[Self::Float]) -> (usize, usize) {
         (self.node_left(node_idx).unwrap(), self.node_right(node_idx).unwrap())
     }
 
-    fn node_projection(&self, node_idx: usize, query: &[f64]) -> (usize, usize, f64) {
+    fn node_projection(&self, node_idx: usize, query: &[Self::Float]) -> (usize, usize, Self::Float) {
         let dist = self.min_distance_to_node(node_idx, query);
         let (first, second) = self.knn_child_order(node_idx, query);
         (first, second, dist)
     }
 
-    fn get_point(&self, i: usize) -> &[f64] {
+    fn data_is_reordered(&self) -> bool;
+
+    fn get_point(&self, i: usize) -> &[Self::Float] {
         let dim = self.dim();
-        &self.data()[i * dim..(i + 1) * dim]
+        let row = if self.data_is_reordered() { i } else { self.indices()[i] };
+        &self.data()[row * dim..(row + 1) * dim]
     }
 
     fn n_points(&self) -> usize;

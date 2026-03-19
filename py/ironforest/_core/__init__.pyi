@@ -24,7 +24,7 @@ class TaskType:
 
 
 class SplitCriterion:
-    """Criterion for evaluating splits."""
+    """Criterion for evaluating splits (impurity measure)."""
 
     @staticmethod
     def gini() -> SplitCriterion: ...
@@ -38,8 +38,17 @@ class SplitCriterion:
     @staticmethod
     def random() -> SplitCriterion: ...
 
+    def __repr__(self) -> str: ...
+
+
+class SplitGeometry:
+    """Split direction: axis-aligned feature split or random projection (oblique)."""
+
     @staticmethod
-    def random_projection() -> SplitCriterion: ...
+    def axis() -> SplitGeometry: ...
+
+    @staticmethod
+    def random_projection() -> SplitGeometry: ...
 
     def __repr__(self) -> str: ...
 
@@ -57,8 +66,9 @@ class TreeConfig:
         max_features: Optional[int] = None,
         criterion: Optional[SplitCriterion] = None,
         seed: int = 42,
-        projection_type = None,
-        projection_density = None,
+        split_geometry: Optional[SplitGeometry] = None,
+        projection_type: Optional[str] = None,
+        projection_density: Optional[float] = None,
     ) -> None: ...
 
     @staticmethod
@@ -94,6 +104,11 @@ class TreeConfig:
     def seed(self) -> int: ...
     @seed.setter
     def seed(self, value: int) -> None: ...
+
+    @property
+    def split_geometry(self) -> SplitGeometry: ...
+    @split_geometry.setter
+    def split_geometry(self, value: SplitGeometry) -> None: ...
 
     def __repr__(self) -> str: ...
 
@@ -264,6 +279,10 @@ class Array(Sequence[T_co], Generic[T_co]):
     @property
     def ndim(self) -> int:
         """Get the number of dimensions."""
+    
+    @property
+    def alive(self) -> bool:
+        """Check if the array is alive."""
 
     def get(self, indices: Sequence[int]) -> float | int:
         """Get element at indices."""
@@ -393,6 +412,9 @@ class Array(Sequence[T_co], Generic[T_co]):
     def __eq__(self, other: ArrayLike) -> Array: ...  # type: ignore[override]
     def __ne__(self, other: ArrayLike) -> Array: ...  # type: ignore[override]
     def __repr__(self) -> str: ...
+
+    def __getbuffer__(self, flags: int) -> memoryview: ...
+    def __releasebuffer__(self, buffer: memoryview) -> None: ...
 
 
 from . import linalg as linalg

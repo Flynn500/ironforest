@@ -13,6 +13,11 @@ pub enum SplitCriterion {
     Entropy,
     Mse,
     Random,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SplitGeometry {
+    Axis,
     RandomProjection,
 }
 
@@ -23,6 +28,7 @@ pub struct TreeConfig {
     pub min_samples_leaf: usize,
     pub max_features: Option<usize>,
     pub criterion: SplitCriterion,
+    pub split_geometry: SplitGeometry,
     pub task_type: TaskType,
     pub n_classes: usize,
     pub seed: u64,
@@ -37,11 +43,11 @@ impl Default for TreeConfig {
             min_samples_leaf: 1,
             max_features: None,
             criterion: SplitCriterion::Gini,
+            split_geometry: SplitGeometry::Axis,
             task_type: TaskType::Classification,
             n_classes: 2,
             seed: 0,
             projection_type: None,
-
         }
     }
 }
