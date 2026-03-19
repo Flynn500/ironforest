@@ -2,14 +2,13 @@ use std::collections::BinaryHeap;
 use crate::{array::NdArray, spatial::HeapItem};
 use rayon::prelude::*;
 use crate::spatial::SpatialTree;
+use num_traits::float::Float as _;
 
 const KNN_PAR_THRESHOLD: usize = 512;
-const EPSILON: f64 = 1E-10;
-
 
 
 pub trait KnnQuery: SpatialTree {
-    fn query_knn(&self, query: &[f64], k: usize) -> Vec<(usize, f64)> {
+    fn query_knn(&self, query: &[Self::Float], k: usize) -> Vec<(usize, Self::Float)> {
         if k == 0 || self.n_points() == 0 {
             return Vec::new();
         }
@@ -28,7 +27,7 @@ pub trait KnnQuery: SpatialTree {
             .collect()
     }
 
-    fn query_knn_recursive(&self, node_idx: usize, query: &[f64], heap: &mut BinaryHeap<HeapItem>, k: usize) {
+    fn query_knn_recursive(&self, node_idx: usize, query: &[Self::Float], heap: &mut BinaryHeap<HeapItem<Self::Float>>, k: usize) {
         if self.node_left(node_idx).is_none() {
             for i in self.node_start(node_idx)..self.node_end(node_idx) {
                 let dist = match Self::REDUCED {
@@ -48,7 +47,7 @@ pub trait KnnQuery: SpatialTree {
 
         let (first, second, node_dist) = self.node_projection(node_idx, query);
 
-        let threshold = heap.peek().map(|t| t.distance + EPSILON).unwrap_or(f64::INFINITY);
+        let threshold = heap.peek().map(|t| t.distance).unwrap_or(Self::Float::infinity());
 
         if heap.len() == k && node_dist > threshold {
             return;
@@ -65,7 +64,7 @@ pub trait KnnQuery: SpatialTree {
         }
     }
 
-    fn query_knn_batch(&self, queries: &NdArray<f64>, k: usize) -> Vec<Vec<(usize, f64)>> {
+    fn query_knn_batch(&self, queries: &NdArray<Self::Float>, k: usize) -> Vec<Vec<(usize, Self::Float)>> {
         let shape = queries.shape().dims();
         assert!(shape.len() == 2, "Expected 2D array (n_queries, dim)");
         let n_queries = shape[0];
@@ -73,7 +72,7 @@ pub trait KnnQuery: SpatialTree {
         assert_eq!(dim, self.dim(), "Query dimension must match tree dimension");
 
         let queries_cow = queries.as_contiguous_slice();
-        let queries_slice: &[f64] = &queries_cow;
+        let queries_slice: &[Self::Float] = &queries_cow;
         if n_queries >= KNN_PAR_THRESHOLD {
             self.par_knn_batch(queries_slice, n_queries, dim, k)
         } else {
@@ -81,7 +80,7 @@ pub trait KnnQuery: SpatialTree {
         }
     }
 
-    fn seq_knn_batch(&self, queries: &[f64], n_queries: usize, dim: usize, k: usize) -> Vec<Vec<(usize, f64)>> {
+    fn seq_knn_batch(&self, queries: &[Self::Float], n_queries: usize, dim: usize, k: usize) -> Vec<Vec<(usize, Self::Float)>> {
         (0..n_queries)
             .map(|i| {
                 let query = &queries[i * dim..(i + 1) * dim];
@@ -90,7 +89,7 @@ pub trait KnnQuery: SpatialTree {
             .collect()
     }
 
-    fn par_knn_batch(&self, queries: &[f64], n_queries: usize, dim: usize, k: usize) -> Vec<Vec<(usize, f64)>> {
+    fn par_knn_batch(&self, queries: &[Self::Float], n_queries: usize, dim: usize, k: usize) -> Vec<Vec<(usize, Self::Float)>> {
         (0..n_queries)
             .into_par_iter()
             .map(|i| {

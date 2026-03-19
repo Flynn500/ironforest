@@ -98,18 +98,25 @@ impl<'py> ArrayLike<'py> {
                 }
             }
             ArrayLike::NumPy(bound) => {
-                let arr = bound.cast::<PyArrayDyn<f64>>()
-                    .map_err(|_| PyTypeError::new_err("expected float64 numpy array"))?;
-                let readonly = arr.readonly();
-                let shape = readonly.shape().to_vec();
+                if let Ok(arr) = bound.cast::<PyArrayDyn<f64>>() {
+                    let readonly = arr.readonly();
+                    let shape = readonly.shape().to_vec();
 
-                if readonly.is_c_contiguous() {
-                    let slice = readonly.as_slice()?;
-                    let owner = bound.clone().into_any().unbind();
-                    Ok(unsafe { NdArray::from_external(owner, slice.as_ptr(), Shape::new(shape)) })
-                } else {
-                    let data: Vec<f64> = readonly.as_array().iter().copied().collect();
+                    if readonly.is_c_contiguous() {
+                        let slice = readonly.as_slice()?;
+                        let owner = bound.clone().into_any().unbind();
+                        Ok(unsafe { NdArray::from_external(owner, slice.as_ptr(), Shape::new(shape)) })
+                    } else {
+                        let data: Vec<f64> = readonly.as_array().iter().copied().collect();
+                        Ok(NdArray::from_vec(Shape::new(shape), data))
+                    }
+                } else if let Ok(arr) = bound.cast::<PyArrayDyn<f32>>() {
+                    let readonly = arr.readonly();
+                    let shape = readonly.shape().to_vec();
+                    let data: Vec<f64> = readonly.as_array().iter().map(|&x| x as f64).collect();
                     Ok(NdArray::from_vec(Shape::new(shape), data))
+                } else {
+                    Err(PyTypeError::new_err("expected float32 or float64 numpy array"))
                 }
             }
             ArrayLike::Buffer(bound) => {
@@ -142,6 +149,7 @@ impl<'py> ArrayLike<'py> {
                     }
                 }
             }
+            //add zero copy path
             ArrayLike::NumPy(bound) => {
                 if let Ok(arr) = bound.cast::<PyArrayDyn<i64>>() {
                     let readonly = arr.readonly();
@@ -265,6 +273,87 @@ impl<'py> ArrayLike<'py> {
             )));
         }
         Ok(vec)
+    }
+
+    pub fn into_f32_ndarray(self) -> PyResult<NdArray<f32>> {
+        use numpy::PyArrayDyn;
+        match self {
+            ArrayLike::Array(bound) => {
+                let inner = bound.borrow();
+                match &inner.inner {
+                    ArrayData::Float(f) => {
+                        let data: Vec<f32> = f.as_slice_unchecked().iter().map(|&x| x as f32).collect();
+                        Ok(NdArray::from_vec(f.shape().clone(), data))
+                    }
+                    ArrayData::Int(_) => Err(pyo3::exceptions::PyTypeError::new_err(
+                        "expected float array; got integer array"
+                    )),
+                }
+            }
+            ArrayLike::NumPy(bound) => {
+                if let Ok(arr) = bound.cast::<PyArrayDyn<f32>>() {
+                    let readonly = arr.readonly();
+                    let shape = readonly.shape().to_vec();
+                    let data = readonly.as_slice()?.to_vec();
+                    Ok(NdArray::from_vec(Shape::new(shape), data))
+                } else if let Ok(arr) = bound.cast::<PyArrayDyn<f64>>() {
+                    let readonly = arr.readonly();
+                    let shape = readonly.shape().to_vec();
+                    let data: Vec<f32> = readonly.as_slice()?.iter().map(|&x| x as f32).collect();
+                    Ok(NdArray::from_vec(Shape::new(shape), data))
+                } else {
+                    Err(pyo3::exceptions::PyTypeError::new_err("expected float32 or float64 numpy array"))
+                }
+            }
+            ArrayLike::Buffer(bound) => {
+                if let Ok(buf) = pyo3::buffer::PyBuffer::<f32>::get(&bound) {
+                    NdArray::from_buffer(bound.py(), buf)
+                } else {
+                    let buf = pyo3::buffer::PyBuffer::<f64>::get(&bound)
+                        .map_err(|_| pyo3::exceptions::PyTypeError::new_err("buffer not compatible with f32 or f64"))?;
+                    let shape: Vec<usize> = buf.shape().iter().map(|&d| d as usize).collect();
+                    let data: Vec<f32> = buf.to_vec(bound.py())?.into_iter().map(|x| x as f32).collect();
+                    Ok(NdArray::from_vec(Shape::new(shape), data))
+                }
+            }
+            ArrayLike::Scalar(s) => Ok(NdArray::from_vec(Shape::scalar(), vec![s as f32])),
+            ArrayLike::Vec(v) => Ok(NdArray::from_vec(Shape::d1(v.len()), v.iter().map(|&x| x as f32).collect())),
+            ArrayLike::Vec2D(v) => {
+                let (rows, cols) = validate_vec2d(&v)?;
+                let flat: Vec<f32> = v.into_iter().flatten().map(|x| x as f32).collect();
+                Ok(NdArray::from_vec(Shape::new(vec![rows, cols]), flat))
+            }
+            ArrayLike::IntScalar(s) => Ok(NdArray::from_vec(Shape::scalar(), vec![s as f32])),
+        }
+    }
+
+    pub fn into_f32_spatial_query_ndarray(self, expected_dim: usize) -> PyResult<NdArray<f32>> {
+        let arr = self.into_f32_ndarray()?;
+        let shape = arr.shape().dims();
+        match shape.len() {
+            1 => {
+                if shape[0] != expected_dim {
+                    return Err(PyValueError::new_err(format!(
+                        "Query dimension {} doesn't match expected dimension {}",
+                        shape[0], expected_dim
+                    )));
+                }
+                Ok(NdArray::from_vec(
+                    Shape::new(vec![1, shape[0]]),
+                    arr.as_slice_unchecked().to_vec()
+                ))
+            }
+            2 => {
+                if shape[1] != expected_dim {
+                    return Err(PyValueError::new_err(format!(
+                        "Query dimension {} doesn't match expected dimension {}",
+                        shape[1], expected_dim
+                    )));
+                }
+                Ok(arr)
+            }
+            _ => Err(PyValueError::new_err("queries must be 1D or 2D array")),
+        }
     }
 }
 

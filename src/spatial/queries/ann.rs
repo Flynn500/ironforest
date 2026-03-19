@@ -3,22 +3,24 @@ use std::cmp::Reverse;
 use crate::{array::NdArray, spatial::HeapItem};
 use rayon::prelude::*;
 use crate::spatial::SpatialTree;
+use num_traits::float::Float as _;
+use num_traits::identities::Zero as _;
 
 const ANN_PAR_THRESHOLD: usize = 512;
 
 pub trait AnnQuery: SpatialTree {
-    fn query_ann(&self, query: &[f64], k: usize, n_candidates: usize) -> Vec<(usize, f64)> {
+    fn query_ann(&self, query: &[Self::Float], k: usize, n_candidates: usize) -> Vec<(usize, Self::Float)> {
         if k == 0 || self.n_points() == 0 {
             return Vec::new();
         }
         self.ann_candidates_inner(query, k, n_candidates.max(k))
     }
 
-    fn ann_candidates_inner(&self, query: &[f64], k: usize, n_candidates: usize) -> Vec<(usize, f64)> {
-        let mut queue: BinaryHeap<Reverse<HeapItem>> = BinaryHeap::new();
-        let mut candidates: BinaryHeap<HeapItem> = BinaryHeap::new();
+    fn ann_candidates_inner(&self, query: &[Self::Float], k: usize, n_candidates: usize) -> Vec<(usize, Self::Float)> {
+        let mut queue: BinaryHeap<Reverse<HeapItem<Self::Float>>> = BinaryHeap::new();
+        let mut candidates: BinaryHeap<HeapItem<Self::Float>> = BinaryHeap::new();
 
-        queue.push(Reverse(HeapItem { distance: 0.0, index: self.root() }));
+        queue.push(Reverse(HeapItem { distance: Self::Float::zero(), index: self.root() }));
 
         while let Some(Reverse(HeapItem { distance: node_dist, index: node_idx })) = queue.pop() {
             if candidates.len() >= k {
@@ -45,11 +47,11 @@ pub trait AnnQuery: SpatialTree {
                 }
             } else {
                 let (first, second, margin) = self.node_projection(node_idx, query);
-                queue.push(Reverse(HeapItem { distance: 0.0, index: first }));
+                queue.push(Reverse(HeapItem { distance: Self::Float::zero(), index: first }));
                 queue.push(Reverse(HeapItem { distance: margin, index: second }));
             }
         }
-        let mut results: Vec<(usize, f64)> = candidates.into_iter()
+        let mut results: Vec<(usize, Self::Float)> = candidates.into_iter()
             .map(|item| {
                 let dist = if Self::REDUCED {
                     self.metric().post_transform(item.distance)
@@ -59,13 +61,13 @@ pub trait AnnQuery: SpatialTree {
                 (item.index, dist)
             })
             .collect();
-        
+
         results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
         results.truncate(k);
         results
     }
 
-    fn query_ann_batch(&self, queries: &NdArray<f64>, k: usize, n_candidates: usize) -> Vec<Vec<(usize, f64)>> {
+    fn query_ann_batch(&self, queries: &NdArray<Self::Float>, k: usize, n_candidates: usize) -> Vec<Vec<(usize, Self::Float)>> {
         let shape = queries.shape().dims();
         assert!(shape.len() == 2, "Expected 2D array (n_queries, dim)");
         let n_queries = shape[0];
@@ -73,7 +75,7 @@ pub trait AnnQuery: SpatialTree {
         assert_eq!(dim, self.dim(), "Query dimension must match tree dimension");
 
         let queries_cow = queries.as_contiguous_slice();
-        let queries_slice: &[f64] = &queries_cow;
+        let queries_slice: &[Self::Float] = &queries_cow;
         if n_queries >= ANN_PAR_THRESHOLD {
             self.par_ann_batch(queries_slice, n_queries, dim, k, n_candidates)
         } else {
@@ -81,7 +83,7 @@ pub trait AnnQuery: SpatialTree {
         }
     }
 
-    fn seq_ann_batch(&self, queries: &[f64], n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, f64)>> {
+    fn seq_ann_batch(&self, queries: &[Self::Float], n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, Self::Float)>> {
         (0..n_queries)
             .map(|i| {
                 let query = &queries[i * dim..(i + 1) * dim];
@@ -90,7 +92,7 @@ pub trait AnnQuery: SpatialTree {
             .collect()
     }
 
-    fn par_ann_batch(&self, queries: &[f64], n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, f64)>> {
+    fn par_ann_batch(&self, queries: &[Self::Float], n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, Self::Float)>> {
         (0..n_queries)
             .into_par_iter()
             .map(|i| {

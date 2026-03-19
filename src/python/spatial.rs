@@ -4,13 +4,14 @@ use pyo3::types::PyAny;
 use crate::Generator;
 use crate::array::{NdArray, Shape};
 use crate::projection::{ProjectionReducer, ProjectionType};
-use crate::spatial::trees::{AggTree, BallTree, BruteForce, KDTree, MTree, RPTree, VPTree, VantagePointSelection};
+use crate::spatial::trees::{AggTree, BallTree, BruteForce, KDTree, RPTree, VPTree, VantagePointSelection};
 use crate::spatial::{DistanceMetric, KernelType, SpatialTree};
 use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery, AnnQuery};
 use super::{PyArray, ArrayData, ArrayLike};
 use pyo3::types::PyBytes;
 use rmp_serde;
 use std::io::{Write, Read};
+use num_traits::{ToPrimitive, NumCast};
 
 // =============================================================================
 // Result Type
@@ -349,28 +350,28 @@ fn parse_projection_type(projection: &str, density: f64) -> PyResult<ProjectionT
 // types (BallTree, KDTree, VPTree, BruteForce) use this macro; AggTree is
 // excluded because its kernel_density signature differs. M tree is excluded
 // because underlying data is managed differently so KDE without params becomes
-// difficult, maybe should split KDE out as it also won't really make sense for RPTree
+// difficult.
 macro_rules! impl_knn_query {
-    ($py_type:ty) => {
+    ($py_type:ty, $conv:ident) => {
         #[pymethods]
         impl $py_type {
             #[pyo3(signature = (query, k))]
             fn query_knn(&self, query: ArrayLike, k: usize) -> PyResult<PySpatialResult> {
                 let is_batch = query.ndim() == 2;
-                let queries_arr = query.into_spatial_query_ndarray(tree!(self).dim)?;
+                let queries_arr = query.$conv(tree!(self).dim)?;
                 let n_queries = queries_arr.shape().dims()[0];
                 if is_batch {
                     let results = tree!(self).query_knn_batch(&queries_arr, k);
                     let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
                         .flatten()
-                        .map(|(i, d)| (i as i64, d))
+                        .map(|(i, d)| (i as i64, d.to_f64().unwrap()))
                         .unzip();
                     Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, k))
                 } else {
                     let query_slice = &queries_arr.as_slice_unchecked()[..tree!(self).dim];
                     let results = tree!(self).query_knn(query_slice, k);
                     let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
-                        .map(|(i, d)| (i as i64, d)).unzip();
+                        .map(|(i, d)| (i as i64, d.to_f64().unwrap())).unzip();
                     Ok(PySpatialResult::from_single(indices, distances))
                 }
             }
@@ -379,27 +380,27 @@ macro_rules! impl_knn_query {
 }
 
 macro_rules! impl_ann_query {
-    ($py_type:ty) => {
+    ($py_type:ty, $conv:ident) => {
         #[pymethods]
         impl $py_type {
             #[pyo3(signature = (query, k, n_candidates=None))]
             fn query_ann(&self, query: ArrayLike, k: usize, n_candidates: Option<usize>) -> PyResult<PySpatialResult> {
                 let n_candidates = n_candidates.unwrap_or(k * 2);
                 let is_batch = query.ndim() == 2;
-                let queries_arr = query.into_spatial_query_ndarray(tree!(self).dim)?;
+                let queries_arr = query.$conv(tree!(self).dim)?;
                 let n_queries = queries_arr.shape().dims()[0];
                 if is_batch {
                     let results = tree!(self).query_ann_batch(&queries_arr, k, n_candidates);
                     let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
                         .flatten()
-                        .map(|(i, d)| (i as i64, d))
+                        .map(|(i, d)| (i as i64, d.to_f64().unwrap()))
                         .unzip();
                     Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, k))
                 } else {
                     let query_slice = &queries_arr.as_slice_unchecked()[..tree!(self).dim];
                     let results = tree!(self).query_ann(query_slice, k, n_candidates);
                     let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
-                        .map(|(i, d)| (i as i64, d)).unzip();
+                        .map(|(i, d)| (i as i64, d.to_f64().unwrap())).unzip();
                     Ok(PySpatialResult::from_single(indices, distances))
                 }
             }
@@ -408,15 +409,16 @@ macro_rules! impl_ann_query {
 }
 
 macro_rules! impl_radius_query {
-    ($py_type:ty) => {
+    ($py_type:ty, $conv:ident, $float:ty) => {
         #[pymethods]
         impl $py_type {
             #[pyo3(signature = (query, radius))]
             fn query_radius(&self, query: ArrayLike, radius: f64) -> PyResult<PySpatialResult> {
                 let is_batch = query.ndim() == 2;
-                let queries_arr = query.into_spatial_query_ndarray(tree!(self).dim)?;
+                let queries_arr = query.$conv(tree!(self).dim)?;
+                let rad: $float = <$float as NumCast>::from(radius).unwrap();
                 if is_batch {
-                    let results = tree!(self).query_radius_batch(&queries_arr, radius);
+                    let results = tree!(self).query_radius_batch(&queries_arr, rad);
                     let mut all_indices = Vec::new();
                     let mut all_distances = Vec::new();
                     let mut counts = Vec::with_capacity(results.len());
@@ -424,15 +426,15 @@ macro_rules! impl_radius_query {
                         counts.push(batch.len() as i64);
                         for (i, d) in batch {
                             all_indices.push(i as i64);
-                            all_distances.push(d);
+                            all_distances.push(d.to_f64().unwrap());
                         }
                     }
                     Ok(PySpatialResult::from_batch_radius(all_indices, all_distances, counts))
                 } else {
                     let query_slice = &queries_arr.as_slice_unchecked()[..tree!(self).dim];
-                    let results = tree!(self).query_radius(query_slice, radius);
+                    let results = tree!(self).query_radius(query_slice, rad);
                     let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
-                        .map(|(i, d)| (i as i64, d)).unzip();
+                        .map(|(i, d)| (i as i64, d.to_f64().unwrap())).unzip();
                     Ok(PySpatialResult::from_single(indices, distances))
                 }
             }
@@ -441,7 +443,7 @@ macro_rules! impl_radius_query {
 }
 
 macro_rules! impl_kde_query {
-    ($py_type:ty) => {
+    ($py_type:ty, $conv:ident) => {
         #[pymethods]
         impl $py_type {
             #[pyo3(signature = (queries=None, bandwidth=None, kernel=None, normalize=None))]
@@ -458,7 +460,7 @@ macro_rules! impl_kde_query {
                 let normalize = normalize.unwrap_or(false);
 
                 let queries_arr = if let Some(q) = queries {
-                    q.into_spatial_query_ndarray(tree!(self).dim)?
+                    q.$conv(tree!(self).dim)?
                 } else {
                     NdArray::from_vec(
                         Shape::new(vec![tree!(self).n_points, tree!(self).dim]),
@@ -479,43 +481,43 @@ macro_rules! impl_kde_query {
 }
 
 macro_rules! impl_data_query {
-    ($py_type:ty) => {
+    ($py_type:ty, $get_data_fn:ident) => {
         #[pymethods]
         impl $py_type {
             #[pyo3(signature = (indices=None))]
             fn data(&self, indices: Option<ArrayLike>) -> PyResult<PyArray> {
-                get_tree_data(tree!(self).indices(), tree!(self).data(), tree!(self).n_points, tree!(self).dim, indices)
+                $get_data_fn(tree!(self).indices(), tree!(self).data(), tree!(self).n_points, tree!(self).dim, indices)
             }
         }
     };
 }
 
-impl_data_query!(PyBallTree);
-impl_data_query!(PyKDTree);
-impl_data_query!(PyVPTree);
-impl_data_query!(PyBruteForce);
-impl_data_query!(PyRPTree);
+impl_data_query!(PyBallTree, get_tree_data);
+impl_data_query!(PyKDTree, get_tree_data);
+impl_data_query!(PyVPTree, get_tree_data);
+impl_data_query!(PyBruteForce, get_tree_data);
+impl_data_query!(PyRPTree, get_tree_data);
 
-impl_ann_query!(PyBallTree);
-impl_ann_query!(PyKDTree);
-impl_ann_query!(PyRPTree);
+impl_ann_query!(PyBallTree, into_spatial_query_ndarray);
+impl_ann_query!(PyKDTree, into_spatial_query_ndarray);
+impl_ann_query!(PyRPTree, into_spatial_query_ndarray);
 
-impl_knn_query!(PyBallTree);
-impl_knn_query!(PyKDTree);
-impl_knn_query!(PyVPTree);
-impl_knn_query!(PyBruteForce);
-impl_knn_query!(PyRPTree);
+impl_knn_query!(PyBallTree, into_spatial_query_ndarray);
+impl_knn_query!(PyKDTree, into_spatial_query_ndarray);
+impl_knn_query!(PyVPTree, into_spatial_query_ndarray);
+impl_knn_query!(PyBruteForce, into_spatial_query_ndarray);
+impl_knn_query!(PyRPTree, into_spatial_query_ndarray);
 
-impl_radius_query!(PyBallTree);
-impl_radius_query!(PyKDTree);
-impl_radius_query!(PyVPTree);
-impl_radius_query!(PyBruteForce);
-impl_radius_query!(PyRPTree);
+impl_radius_query!(PyBallTree, into_spatial_query_ndarray, f64);
+impl_radius_query!(PyKDTree, into_spatial_query_ndarray, f64);
+impl_radius_query!(PyVPTree, into_spatial_query_ndarray, f64);
+impl_radius_query!(PyBruteForce, into_spatial_query_ndarray, f64);
+impl_radius_query!(PyRPTree, into_spatial_query_ndarray, f64);
 
-impl_kde_query!(PyBallTree);
-impl_kde_query!(PyKDTree);
-impl_kde_query!(PyVPTree);
-impl_kde_query!(PyBruteForce);
+impl_kde_query!(PyBallTree, into_spatial_query_ndarray);
+impl_kde_query!(PyKDTree, into_spatial_query_ndarray);
+impl_kde_query!(PyVPTree, into_spatial_query_ndarray);
+impl_kde_query!(PyBruteForce, into_spatial_query_ndarray);
 
 
 // =============================================================================
@@ -528,7 +530,7 @@ impl_kde_query!(PyBruteForce);
 
 macro_rules! impl_serialization_methods {
     ($py_type:ty, $inner_type:ty, $constructor:ident) => {
-        #[pymethods] //ide error
+        #[pymethods]
         impl $py_type {
             fn __getstate__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
                 let bytes = rmp_serde::to_vec(tree!(self))
@@ -733,7 +735,6 @@ impl PyRPTree {
     fn from_array(mut array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, projection: Option<&str>, seed: u64, preserve_array: bool) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        // Borrow for ndim before consuming / viewing the array.
         let ndim = array.as_float()?.ndim() as f64;
         let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0 / ndim.sqrt())?;
         let data = if preserve_array {
@@ -841,9 +842,6 @@ impl PyAggTree {
         Ok(PyAggTree { inner: Some(tree) })
     }
 
-    /// Note: `copy` is accepted for API consistency but `AggTree` always
-    /// materialises its data — the compact step requires an owned, reordered
-    /// buffer. External (numpy-backed) arrays are always copied internally.
     #[new]
     #[pyo3(signature = (array, leaf_size=20, metric="euclidean", kernel="gaussian", bandwidth=1.0, atol=0.01, copy=true))]
     fn __init__(
@@ -1151,11 +1149,248 @@ impl PyProjectionReducer {
 }
 
 // =============================================================================
+// f32 Tree Support
+// =============================================================================
+
+use crate::spatial::trees::{KDTree32, BallTree32, VPTree32, BruteForce32, RPTree32};
+
+/// Like `get_tree_data` but for f32-backed trees; upcasts to f64 for output.
+fn get_tree_data_f32(
+    tree_indices: &[usize],
+    raw_data: &[f32],
+    n_points: usize,
+    dim: usize,
+    indices: Option<ArrayLike>,
+) -> PyResult<PyArray> {
+    let mut original_data = vec![0.0f64; n_points * dim];
+    for (tree_pos, &orig_idx) in tree_indices.iter().enumerate() {
+        for d in 0..dim {
+            original_data[orig_idx * dim + d] = raw_data[tree_pos * dim + d] as f64;
+        }
+    }
+
+    match indices {
+        None => Ok(PyArray {
+            inner: ArrayData::Float(NdArray::from_vec(Shape::new(vec![n_points, dim]), original_data)),
+            alive: true,
+        }),
+        Some(idx) => {
+            let idx_arr = idx.into_i64_ndarray()?;
+            let k = idx_arr.len();
+            let mut result = Vec::with_capacity(k * dim);
+            for &orig_idx in idx_arr.as_slice_unchecked() {
+                let i = orig_idx as usize;
+                if i >= n_points {
+                    return Err(PyValueError::new_err(format!(
+                        "Index {} out of bounds for tree with {} points", orig_idx, n_points
+                    )));
+                }
+                result.extend_from_slice(&original_data[i * dim..(i + 1) * dim]);
+            }
+            Ok(PyArray {
+                inner: ArrayData::Float(NdArray::from_vec(Shape::new(vec![k, dim]), result)),
+                alive: true,
+            })
+        }
+    }
+}
+
+#[pyclass(name = "KDTree32")]
+pub struct PyKDTree32 {
+    inner: Option<KDTree32>,
+}
+
+#[pyclass(name = "BallTree32")]
+pub struct PyBallTree32 {
+    inner: Option<BallTree32>,
+}
+
+#[pyclass(name = "VPTree32")]
+pub struct PyVPTree32 {
+    inner: Option<VPTree32>,
+}
+
+#[pyclass(name = "BruteForce32")]
+pub struct PyBruteForce32 {
+    inner: Option<BruteForce32>,
+}
+
+#[pyclass(name = "RPTree32")]
+pub struct PyRPTree32 {
+    inner: Option<RPTree32>,
+}
+
+
+impl_data_query!(PyKDTree32, get_tree_data_f32);
+impl_data_query!(PyBallTree32, get_tree_data_f32);
+impl_data_query!(PyVPTree32, get_tree_data_f32);
+impl_data_query!(PyBruteForce32, get_tree_data_f32);
+impl_data_query!(PyRPTree32, get_tree_data_f32);
+
+impl_knn_query!(PyKDTree32, into_f32_spatial_query_ndarray);
+impl_knn_query!(PyBallTree32, into_f32_spatial_query_ndarray);
+impl_knn_query!(PyVPTree32, into_f32_spatial_query_ndarray);
+impl_knn_query!(PyBruteForce32, into_f32_spatial_query_ndarray);
+impl_knn_query!(PyRPTree32, into_f32_spatial_query_ndarray);
+
+impl_radius_query!(PyKDTree32, into_f32_spatial_query_ndarray, f32);
+impl_radius_query!(PyBallTree32, into_f32_spatial_query_ndarray, f32);
+impl_radius_query!(PyVPTree32, into_f32_spatial_query_ndarray, f32);
+impl_radius_query!(PyBruteForce32, into_f32_spatial_query_ndarray, f32);
+impl_radius_query!(PyRPTree32, into_f32_spatial_query_ndarray, f32);
+
+impl_ann_query!(PyKDTree32, into_f32_spatial_query_ndarray);
+impl_ann_query!(PyBallTree32, into_f32_spatial_query_ndarray);
+impl_ann_query!(PyRPTree32, into_f32_spatial_query_ndarray);
+
+impl_kde_query!(PyKDTree32, into_f32_spatial_query_ndarray);
+impl_kde_query!(PyBallTree32, into_f32_spatial_query_ndarray);
+impl_kde_query!(PyVPTree32, into_f32_spatial_query_ndarray);
+impl_kde_query!(PyBruteForce32, into_f32_spatial_query_ndarray);
+
+impl_serialization_methods!(PyKDTree32, KDTree32, PyKDTree32);
+impl_serialization_methods!(PyBallTree32, BallTree32, PyBallTree32);
+impl_serialization_methods!(PyVPTree32, VPTree32, PyVPTree32);
+impl_serialization_methods!(PyBruteForce32, BruteForce32, PyBruteForce32);
+impl_serialization_methods!(PyRPTree32, RPTree32, PyRPTree32);
+
+// --- f32 constructors ---
+
+/// Convert `NdArray<f64>` → `NdArray<f32>` with a scalar cast.
+fn f64_ndarray_to_f32(src: &NdArray<f64>) -> NdArray<f32> {
+    let data: Vec<f32> = src.as_slice_unchecked().iter().map(|&x| x as f32).collect();
+    NdArray::from_vec(src.shape().clone(), data)
+}
+
+#[pymethods]
+impl PyKDTree32 {
+    #[staticmethod]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", preserve_array=true))]
+    fn from_array(array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, preserve_array: bool) -> PyResult<Self> {
+        let leaf_size = leaf_size.unwrap_or(20);
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        let data = f64_ndarray_to_f32(array.as_float()?);
+        let tree = KDTree32::new(data, leaf_size, metric);
+        Ok(PyKDTree32 { inner: Some(tree) })
+    }
+
+    #[new]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", copy=true))]
+    fn __init__(array: ArrayLike, leaf_size: Option<usize>, metric: Option<&str>, copy: bool) -> PyResult<Self> {
+        let leaf_size = leaf_size.unwrap_or(20);
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        let data = array.into_f32_ndarray()?.to_contiguous();
+        let tree = KDTree32::new(data, leaf_size, metric);
+        Ok(PyKDTree32 { inner: Some(tree) })
+    }
+}
+
+#[pymethods]
+impl PyBallTree32 {
+    #[staticmethod]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", preserve_array=true))]
+    fn from_array(array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, preserve_array: bool) -> PyResult<Self> {
+        let leaf_size = leaf_size.unwrap_or(20);
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        let data = f64_ndarray_to_f32(array.as_float()?);
+        let tree = BallTree32::new(data, leaf_size, metric);
+        Ok(PyBallTree32 { inner: Some(tree) })
+    }
+
+    #[new]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", copy=true))]
+    fn __init__(array: ArrayLike, leaf_size: Option<usize>, metric: Option<&str>, copy: bool) -> PyResult<Self> {
+        let leaf_size = leaf_size.unwrap_or(20);
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        let data = array.into_f32_ndarray()?.to_contiguous();
+        let tree = BallTree32::new(data, leaf_size, metric);
+        Ok(PyBallTree32 { inner: Some(tree) })
+    }
+}
+
+#[pymethods]
+impl PyVPTree32 {
+    #[staticmethod]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", selection="variance", preserve_array=true))]
+    fn from_array(array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, selection: Option<&str>, preserve_array: bool) -> PyResult<Self> {
+        let leaf_size = leaf_size.unwrap_or(20);
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        let selection_method = parse_vantage_selection(selection.unwrap_or("variance"))?;
+        let data = f64_ndarray_to_f32(array.as_float()?);
+        let tree = VPTree32::new(data, leaf_size, metric, selection_method);
+        Ok(PyVPTree32 { inner: Some(tree) })
+    }
+
+    #[new]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", selection="variance", copy=true))]
+    fn __init__(array: ArrayLike, leaf_size: Option<usize>, metric: Option<&str>, selection: Option<&str>, copy: bool) -> PyResult<Self> {
+        let leaf_size = leaf_size.unwrap_or(20);
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        let selection_method = parse_vantage_selection(selection.unwrap_or("variance"))?;
+        let data = array.into_f32_ndarray()?.to_contiguous();
+        let tree = VPTree32::new(data, leaf_size, metric, selection_method);
+        Ok(PyVPTree32 { inner: Some(tree) })
+    }
+}
+
+#[pymethods]
+impl PyBruteForce32 {
+    #[staticmethod]
+    #[pyo3(signature = (array, metric="euclidean", preserve_array=true))]
+    fn from_array(array: PyRefMut<'_, PyArray>, metric: Option<&str>, preserve_array: bool) -> PyResult<Self> {
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        let data = f64_ndarray_to_f32(array.as_float()?);
+        let tree = BruteForce32::new(data, metric);
+        Ok(PyBruteForce32 { inner: Some(tree) })
+    }
+
+    #[new]
+    #[pyo3(signature = (array, metric="euclidean", copy=true))]
+    fn __init__(array: ArrayLike, metric: Option<&str>, copy: bool) -> PyResult<Self> {
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        let data = array.into_f32_ndarray()?.to_contiguous();
+        let tree = BruteForce32::new(data, metric);
+        Ok(PyBruteForce32 { inner: Some(tree) })
+    }
+}
+
+#[pymethods]
+impl PyRPTree32 {
+    #[staticmethod]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", projection="gaussian", seed=0, preserve_array=true))]
+    fn from_array(array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, projection: Option<&str>, seed: u64, preserve_array: bool) -> PyResult<Self> {
+        let leaf_size = leaf_size.unwrap_or(20);
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        let f64_data = array.as_float()?;
+        let ndim = f64_data.shape().dims()[1] as f64;
+        let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0 / ndim.sqrt())?;
+        let data = f64_ndarray_to_f32(f64_data);
+        let tree = RPTree32::new(data, leaf_size, metric, projection_method, seed);
+        Ok(PyRPTree32 { inner: Some(tree) })
+    }
+
+    #[new]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", projection="gaussian", seed=0, copy=true))]
+    fn __init__(array: ArrayLike, leaf_size: Option<usize>, metric: Option<&str>, projection: Option<&str>, seed: u64, copy: bool) -> PyResult<Self> {
+        let leaf_size = leaf_size.unwrap_or(20);
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        let data = array.into_f32_ndarray()?.to_contiguous();
+        let ndim = data.shape().dims()[1] as f64;
+        let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0 / ndim.sqrt())?;
+        let tree = RPTree32::new(data, leaf_size, metric, projection_method, seed);
+        Ok(PyRPTree32 { inner: Some(tree) })
+    }
+}
+
+// =============================================================================
 // Module Registration
 // =============================================================================
 
 pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySpatialResult>()?;
+
+    m.add_class::<PyProjectionReducer>()?;
+    //f64
     m.add_class::<PyBallTree>()?;
     m.add_class::<PyKDTree>()?;
     m.add_class::<PyVPTree>()?;
@@ -1163,6 +1398,11 @@ pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAggTree>()?;
     m.add_class::<PyBruteForce>()?;
     m.add_class::<PyRPTree>()?;
-    m.add_class::<PyProjectionReducer>()?;
+    // f32 variants
+    m.add_class::<PyKDTree32>()?;
+    m.add_class::<PyBallTree32>()?;
+    m.add_class::<PyVPTree32>()?;
+    m.add_class::<PyBruteForce32>()?;
+    m.add_class::<PyRPTree32>()?;
     Ok(())
 }

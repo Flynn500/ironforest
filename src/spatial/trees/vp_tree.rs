@@ -1,5 +1,5 @@
-use std::{cmp::Ordering};
-use crate::{array::{NdArray, Shape}, spatial::{common::DistanceMetric}};
+use std::cmp::Ordering;
+use crate::{array::{NdArray, Shape}, spatial::common::{DistanceMetric, IronFloat}};
 use crate::random::Generator;
 use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery};
 use crate::spatial::SpatialTree;
@@ -13,20 +13,20 @@ pub enum VantagePointSelection {
     Variance { sample_size: usize },
 }
 
-impl VantagePointSelection{
-    fn select_vantage(
-    &self,
-    start: usize,
-    end: usize,
-    data: &NdArray<f64>,
-    indices: &[usize],
-    metric: &DistanceMetric,
-) -> usize {
+impl VantagePointSelection {
+    fn select_vantage<T: IronFloat>(
+        &self,
+        start: usize,
+        end: usize,
+        data: &NdArray<T>,
+        indices: &[usize],
+        metric: &DistanceMetric,
+    ) -> usize {
         match self {
             VantagePointSelection::First => start,
             VantagePointSelection::Random => {
                 let mut rng = Generator::new();
-                let i = rng.randint(start as i64, end as i64, Shape::scalar());
+                let i = rng.randint(start as i64, end as i64, crate::Shape::scalar());
                 i.item() as usize
             },
             VantagePointSelection::Variance { sample_size } => {
@@ -35,21 +35,21 @@ impl VantagePointSelection{
                 let k = (*sample_size).min(n);
 
                 let candidates: Vec<usize> = (0..k)
-                    .map(|_| rng.randint(start as i64, end as i64, Shape::scalar()).item() as usize)
+                    .map(|_| rng.randint(start as i64, end as i64, crate::Shape::scalar()).item() as usize)
                     .collect();
 
                 candidates.iter().max_by(|&&a, &&b| {
                     let pa = data.row(indices[a]).to_vec();
-                    let var_a = candidates.iter().map(|&j| {
+                    let var_a: T = candidates.iter().map(|&j| {
                         let d = metric.distance(data.row(indices[j]), &pa);
                         d * d
-                    }).sum::<f64>();
+                    }).sum();
 
                     let pb = data.row(indices[b]).to_vec();
-                    let var_b = candidates.iter().map(|&j| {
+                    let var_b: T = candidates.iter().map(|&j| {
                         let d = metric.distance(data.row(indices[j]), &pb);
                         d * d
-                    }).sum::<f64>();
+                    }).sum();
 
                     var_a.partial_cmp(&var_b).unwrap_or(Ordering::Equal)
                 }).copied().unwrap_or(start)
@@ -60,22 +60,24 @@ impl VantagePointSelection{
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VPNode {
+#[serde(bound = "T: IronFloat")]
+pub struct VPNode<T> {
     pub start: usize,
     pub end: usize,
     pub left: Option<usize>,
     pub right: Option<usize>,
 
-    pub radius: f64,
-    pub center: Vec<f64>,
-    pub bounding_radius: f64,
+    pub radius: T,
+    pub center: Vec<T>,
+    pub bounding_radius: T,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VPTree {
-    pub nodes: Vec<VPNode>,
+#[serde(bound = "T: IronFloat")]
+pub struct VPTree<T: IronFloat> {
+    pub nodes: Vec<VPNode<T>>,
     pub indices: Vec<usize>,
-    pub data: NdArray<f64>,
+    pub data: NdArray<T>,
     pub n_points: usize,
     pub dim: usize,
     pub leaf_size: usize,
@@ -84,13 +86,13 @@ pub struct VPTree {
     pub data_is_reordered: bool,
 }
 
-impl VPTree {
-    pub fn new(mut data: NdArray<f64>, leaf_size: usize, metric: DistanceMetric, selection_method: VantagePointSelection) -> Self{
+impl<T: IronFloat> VPTree<T> {
+    pub fn new(mut data: NdArray<T>, leaf_size: usize, metric: DistanceMetric, selection_method: VantagePointSelection) -> Self {
         let shape = data.shape().dims();
         assert!(shape.len() == 2, "Expected 2D array (n_points, dim)");
         let n_points = shape[0];
         let dim = shape[1];
-        
+
         if (matches!(metric, DistanceMetric::Cosine) && !data.is_owned()) || !data.is_contiguous() {
             data = data.to_contiguous();
         }
@@ -123,7 +125,7 @@ impl VPTree {
     }
 
     fn reorder_data(&mut self) {
-        let mut new_data = vec![0.0; self.data.len()];
+        let mut new_data = vec![T::zero(); self.data.len()];
 
         for (new_idx, &old_idx) in self.indices.iter().enumerate() {
             let dst = new_idx * self.dim;
@@ -133,19 +135,19 @@ impl VPTree {
         self.data = NdArray::from_vec(Shape::new(vec![self.n_points, self.dim]), new_data);
     }
 
-    fn init_node(&mut self, start: usize, end: usize) -> (f64, usize) {
+    fn init_node(&mut self, start: usize, end: usize) -> (T, usize) {
         let vantage_idx = self.selection_method.select_vantage(
             start,
             end,
             &self.data,
             &self.indices,
             &self.metric,
-        ); 
-        self.indices.swap(start, vantage_idx);  
+        );
+        self.indices.swap(start, vantage_idx);
 
         let vantage_point = self.data.row(self.indices[start]).to_vec();
 
-        let mut idx_dist: Vec<(usize, f64)> = (start + 1..end)
+        let mut idx_dist: Vec<(usize, T)> = (start + 1..end)
             .map(|i| {
                 let p = self.data.row(self.indices[i]);
                 let dist = self.metric.distance(p, &vantage_point);
@@ -167,8 +169,9 @@ impl VPTree {
             let lower_max = idx_dist[..mid]
                 .iter()
                 .map(|(_, d)| *d)
-                .fold(f64::NEG_INFINITY, f64::max);
-            (lower_max + idx_dist[mid].1) * 0.5
+                .fold(T::neg_infinity(), |a, b| a.max(b));
+            let two = T::one() + T::one();
+            (lower_max + idx_dist[mid].1) / two
         };
 
         let reordered: Vec<usize> = idx_dist.iter().map(|(i, _)| self.indices[*i]).collect();
@@ -181,20 +184,21 @@ impl VPTree {
         let count = end - start;
         let dim = self.dim;
 
-        let mut center = vec![0.0; dim];
+        let mut center = vec![T::zero(); dim];
         for i in start..end {
             let p = self.data.row(self.indices[i]);
             for d in 0..dim {
-                center[d] += p[d];
+                center[d] = center[d] + p[d];
             }
         }
+        let n: T = T::from(count).unwrap();
         for d in 0..dim {
-            center[d] /= count as f64;
+            center[d] = center[d] / n;
         }
 
         let bounding_radius = (start..end)
             .map(|i| self.metric.distance(self.data.row(self.indices[i]), &center))
-            .fold(0.0f64, f64::max);
+            .fold(T::zero(), |a, b| a.max(b));
 
         if count <= self.leaf_size {
             let node_idx = self.nodes.len();
@@ -203,7 +207,7 @@ impl VPTree {
                 end,
                 left: None,
                 right: None,
-                radius: 0.0,
+                radius: T::zero(),
                 center,
                 bounding_radius,
             });
@@ -233,16 +237,17 @@ impl VPTree {
     }
 }
 
-impl SpatialTree for VPTree {
-    type Node = VPNode;
+impl<T: IronFloat> SpatialTree for VPTree<T> {
+    type Node = VPNode<T>;
+    type Float = T;
     const REDUCED: bool = false;
 
-    fn nodes(&self) -> &[VPNode] { &self.nodes }
+    fn nodes(&self) -> &[VPNode<T>] { &self.nodes }
     fn indices(&self) -> &[usize] { &self.indices }
-    fn data(&self) -> &[f64] { self.data.as_slice_unchecked() }
+    fn data(&self) -> &[T] { self.data.as_slice_unchecked() }
     fn dim(&self) -> usize { self.dim }
     fn metric(&self) -> &DistanceMetric { &self.metric }
-    fn n_points(&self) -> usize {self.n_points}
+    fn n_points(&self) -> usize { self.n_points }
     fn data_is_reordered(&self) -> bool { self.data_is_reordered }
 
     fn node_start(&self, idx: usize) -> usize { self.nodes[idx].start }
@@ -250,13 +255,13 @@ impl SpatialTree for VPTree {
     fn node_left(&self, idx: usize) -> Option<usize> { self.nodes[idx].left }
     fn node_right(&self, idx: usize) -> Option<usize> { self.nodes[idx].right }
 
-    fn min_distance_to_node(&self, node_idx: usize, query: &[f64]) -> f64 {
+    fn min_distance_to_node(&self, node_idx: usize, query: &[T]) -> T {
         let node = &self.nodes[node_idx];
         let d = self.metric.distance(query, &node.center);
-        (d - node.bounding_radius).max(0.0)
+        (d - node.bounding_radius).max(T::zero())
     }
 
-    fn knn_child_order(&self, node_idx: usize, query: &[f64]) -> (usize, usize) {
+    fn knn_child_order(&self, node_idx: usize, query: &[T]) -> (usize, usize) {
         let node = &self.nodes[node_idx];
         let d = self.metric.distance(query, self.get_point(node.start));
         let (l, r) = (node.left.unwrap(), node.right.unwrap());
@@ -264,14 +269,6 @@ impl SpatialTree for VPTree {
     }
 }
 
-impl KnnQuery for VPTree {
-
-}
-
-impl RadiusQuery for VPTree {
-
-}
-
-impl KdeQuery for VPTree {
-
-}
+impl<T: IronFloat> KnnQuery for VPTree<T> {}
+impl<T: IronFloat> RadiusQuery for VPTree<T> {}
+impl<T: IronFloat> KdeQuery for VPTree<T> {}

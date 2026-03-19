@@ -1,39 +1,42 @@
-use crate::{KernelType, array::NdArray, spatial::{HeapItem, common::DistanceMetric}};
+use crate::{KernelType, array::NdArray, spatial::{HeapItem, common::{DistanceMetric, IronFloat}}};
 use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery};
 use crate::spatial::SpatialTree;
 use serde::{Deserialize, Serialize};
 use std::collections::BinaryHeap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RoutingEntry {
-    pub object: Vec<f64>,
-    pub covering_radius: f64,
-    pub dist_to_parent: f64,
+#[serde(bound = "T: IronFloat")]
+pub struct RoutingEntry<T> {
+    pub object: Vec<T>,
+    pub covering_radius: T,
+    pub dist_to_parent: T,
     pub child_idx: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LeafEntry {
-    pub object: Vec<f64>,
-    pub dist_to_parent: f64,
+#[serde(bound = "T: IronFloat")]
+pub struct LeafEntry<T> {
+    pub object: Vec<T>,
+    pub dist_to_parent: T,
     pub point_idx: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum MNode {
+#[serde(bound = "T: IronFloat")]
+pub enum MNode<T> {
     Internal {
-        parent_dist: f64,
+        parent_dist: T,
         count: usize,
-        entries: Vec<RoutingEntry>,
+        entries: Vec<RoutingEntry<T>>,
     },
     Leaf {
-        parent_dist: f64,
+        parent_dist: T,
         count: usize,
-        entries: Vec<LeafEntry>,
+        entries: Vec<LeafEntry<T>>,
     },
 }
 
-impl MNode{
+impl<T: IronFloat> MNode<T> {
     pub fn count(&self) -> usize {
         match self {
             MNode::Internal { count, .. } => *count,
@@ -46,8 +49,9 @@ impl MNode{
 //MTree does not use our NdArray internally. Internal structure differs enough were
 //we just used vectors and overwrite query methods.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MTree {
-    pub nodes: Vec<MNode>,
+#[serde(bound = "T: IronFloat")]
+pub struct MTree<T: IronFloat> {
+    pub nodes: Vec<MNode<T>>,
     pub root: usize,
     pub dim: usize,
     pub n_points: usize,
@@ -57,10 +61,10 @@ pub struct MTree {
 
 
 
-impl MTree {
+impl<T: IronFloat> MTree<T> {
     pub fn new(dim: usize, capacity: usize, metric: DistanceMetric) -> Self {
         let root = MNode::Leaf {
-            parent_dist: 0.0,
+            parent_dist: T::zero(),
             count: 0,
             entries: Vec::new(),
         };
@@ -74,13 +78,13 @@ impl MTree {
         }
     }
 
-    pub fn from_ndarray(array: &NdArray<f64>, capacity: usize, metric: DistanceMetric) -> Self {
+    pub fn from_ndarray(array: &NdArray<T>, capacity: usize, metric: DistanceMetric) -> Self {
         let shape = array.shape().dims();
-        
+
         assert!(shape.len() == 2, "Expected 2D array (n_points, dim)");
 
         let dim = shape[1];
-        
+
         let mut tree = Self::new(dim, capacity, metric);
 
         let array_contig;
@@ -97,8 +101,8 @@ impl MTree {
         tree
     }
 
-    pub fn collect_data(&self) -> Vec<f64> {
-        let mut data = vec![0.0f64; self.n_points * self.dim];
+    pub fn collect_data(&self) -> Vec<T> {
+        let mut data = vec![T::zero(); self.n_points * self.dim];
         for node in &self.nodes {
             if let MNode::Leaf { entries, .. } = node {
                 for entry in entries {
@@ -110,7 +114,7 @@ impl MTree {
         data
     }
 
-    fn insert_at(&mut self, node_idx: usize, point: Vec<f64>, point_idx: usize, dist_to_parent: f64) -> Option<(RoutingEntry, RoutingEntry)> {
+    fn insert_at(&mut self, node_idx: usize, point: Vec<T>, point_idx: usize, dist_to_parent: T) -> Option<(RoutingEntry<T>, RoutingEntry<T>)> {
         match &self.nodes[node_idx] {
             MNode::Leaf { .. } => {
                 self.insert_into_leaf(node_idx, point, point_idx, dist_to_parent)
@@ -121,17 +125,17 @@ impl MTree {
         }
     }
 
-    pub fn insert(&mut self, point: Vec<f64>, point_idx: usize) {
+    pub fn insert(&mut self, point: Vec<T>, point_idx: usize) {
         let point = self.metric.pre_transform(&point).into_owned();
-        if let Some((mut left, mut right)) = self.insert_at(self.root, point, point_idx, 0.0) {
-            left.dist_to_parent = 0.0;
-            right.dist_to_parent = 0.0;
-            
+        if let Some((mut left, mut right)) = self.insert_at(self.root, point, point_idx, T::zero()) {
+            left.dist_to_parent = T::zero();
+            right.dist_to_parent = T::zero();
+
             let count = self.nodes[left.child_idx].count() + self.nodes[right.child_idx].count();
 
             let new_root = MNode::Internal {
-                parent_dist: 0.0,
-                count: count,
+                parent_dist: T::zero(),
+                count,
                 entries: vec![left, right],
             };
 
@@ -142,18 +146,18 @@ impl MTree {
         self.n_points += 1;
     }
 
-    fn insert_into_leaf(&mut self, node_idx: usize, point: Vec<f64>, point_idx: usize, dist_to_parent: f64) -> Option<(RoutingEntry, RoutingEntry)> {
-        let MNode::Leaf { 
-            entries, 
-            count, .. 
+    fn insert_into_leaf(&mut self, node_idx: usize, point: Vec<T>, point_idx: usize, dist_to_parent: T) -> Option<(RoutingEntry<T>, RoutingEntry<T>)> {
+        let MNode::Leaf {
+            entries,
+            count, ..
         } = &mut self.nodes[node_idx] else { unreachable!() };
 
-        entries.push(LeafEntry { 
-            object: point, 
-            dist_to_parent, 
-            point_idx 
+        entries.push(LeafEntry {
+            object: point,
+            dist_to_parent,
+            point_idx
         });
-        
+
         *count += 1;
 
         if entries.len() > self.capacity {
@@ -163,11 +167,11 @@ impl MTree {
         }
     }
 
-    fn pick_best_child(&self, node_idx: usize, point: &[f64]) -> usize {
+    fn pick_best_child(&self, node_idx: usize, point: &[T]) -> usize {
         let MNode::Internal { entries, .. } = &self.nodes[node_idx] else { unreachable!() };
 
         let mut best_idx = 0;
-        let mut best_cost = f64::MAX;
+        let mut best_cost = T::max_value();
 
         for (i, entry) in entries.iter().enumerate() {
             let d = self.metric.distance(point, &entry.object);
@@ -186,7 +190,7 @@ impl MTree {
         best_idx
     }
 
-    fn insert_into_internal(&mut self, node_idx: usize, point: Vec<f64>, point_idx: usize) -> Option<(RoutingEntry, RoutingEntry)> {
+    fn insert_into_internal(&mut self, node_idx: usize, point: Vec<T>, point_idx: usize) -> Option<(RoutingEntry<T>, RoutingEntry<T>)> {
         let best_entry_idx = self.pick_best_child(node_idx, &point);
 
         let MNode::Internal { entries, .. } = &self.nodes[node_idx] else { unreachable!() };
@@ -202,7 +206,7 @@ impl MTree {
 
         if let Some((mut left, mut right)) = split {
             left.dist_to_parent = self.metric.distance(&left.object, &parent_obj);
-            right.dist_to_parent =self.metric.distance(&right.object, &parent_obj);
+            right.dist_to_parent = self.metric.distance(&right.object, &parent_obj);
 
             entries[best_entry_idx] = left;
             entries.push(right);
@@ -215,9 +219,9 @@ impl MTree {
         None
     }
 
-    fn promote(&self, objects: &[Vec<f64>]) -> (usize, usize) {
+    fn promote(&self, objects: &[Vec<T>]) -> (usize, usize) {
         let mut best = (0, 1);
-        let mut best_dist = 0.0;
+        let mut best_dist = T::zero();
 
         for i in 0..objects.len() {
             for j in i+1..objects.len() {
@@ -231,7 +235,7 @@ impl MTree {
         best
     }
 
-    fn split_leaf(&mut self, node_idx: usize) -> (RoutingEntry, RoutingEntry) {
+    fn split_leaf(&mut self, node_idx: usize) -> (RoutingEntry<T>, RoutingEntry<T>) {
         let MNode::Leaf { entries, .. } = &mut self.nodes[node_idx] else { unreachable!() };
         let entries = std::mem::take(entries);
 
@@ -240,8 +244,8 @@ impl MTree {
         let p1 = entries[p1_idx].object.clone();
         let p2 = entries[p2_idx].object.clone();
 
-        let mut left_entries: Vec<LeafEntry> = Vec::new();
-        let mut right_entries: Vec<LeafEntry> = Vec::new();
+        let mut left_entries: Vec<LeafEntry<T>> = Vec::new();
+        let mut right_entries: Vec<LeafEntry<T>> = Vec::new();
 
         for entry in entries {
             let d1 = self.metric.distance(&entry.object, &p1);
@@ -253,45 +257,45 @@ impl MTree {
             }
         }
 
-        let left_radius = left_entries.iter().map(|e| e.dist_to_parent).fold(0.0_f64, f64::max);
-        let right_radius = right_entries.iter().map(|e| e.dist_to_parent).fold(0.0_f64, f64::max);
+        let left_radius = left_entries.iter().map(|e| e.dist_to_parent).fold(T::zero(), |a, b| a.max(b));
+        let right_radius = right_entries.iter().map(|e| e.dist_to_parent).fold(T::zero(), |a, b| a.max(b));
 
         let left_count = left_entries.len();
         let right_count = right_entries.len();
 
-        self.nodes[node_idx] = MNode::Leaf { 
-            parent_dist: 0.0,
+        self.nodes[node_idx] = MNode::Leaf {
+            parent_dist: T::zero(),
             count: left_count,
-            entries: 
-            left_entries };
-        
+            entries: left_entries,
+        };
 
-        self.nodes.push(MNode::Leaf { 
-            parent_dist: 0.0, 
+
+        self.nodes.push(MNode::Leaf {
+            parent_dist: T::zero(),
             count: right_count,
-            entries: right_entries 
+            entries: right_entries
         });
 
         let right_idx = self.nodes.len() - 1;
 
-        let left_entry = RoutingEntry { object: p1, covering_radius: left_radius, dist_to_parent: 0.0, child_idx: node_idx };
-        let right_entry = RoutingEntry { object: p2, covering_radius: right_radius, dist_to_parent: 0.0, child_idx: right_idx };
+        let left_entry = RoutingEntry { object: p1, covering_radius: left_radius, dist_to_parent: T::zero(), child_idx: node_idx };
+        let right_entry = RoutingEntry { object: p2, covering_radius: right_radius, dist_to_parent: T::zero(), child_idx: right_idx };
 
         (left_entry, right_entry)
     }
 
-    fn split_internal(&mut self, node_idx: usize) -> (RoutingEntry, RoutingEntry) {
+    fn split_internal(&mut self, node_idx: usize) -> (RoutingEntry<T>, RoutingEntry<T>) {
         let MNode::Internal { entries, .. } = &mut self.nodes[node_idx] else { unreachable!() };
         let entries = std::mem::take(entries);
 
-        let objects: Vec<Vec<f64>> = entries.iter().map(|e| e.object.clone()).collect();
+        let objects: Vec<Vec<T>> = entries.iter().map(|e| e.object.clone()).collect();
         let (p1_idx, p2_idx) = self.promote(&objects);
 
         let p1 = entries[p1_idx].object.clone();
         let p2 = entries[p2_idx].object.clone();
 
-        let mut left_entries: Vec<RoutingEntry> = Vec::new();
-        let mut right_entries: Vec<RoutingEntry> = Vec::new();
+        let mut left_entries: Vec<RoutingEntry<T>> = Vec::new();
+        let mut right_entries: Vec<RoutingEntry<T>> = Vec::new();
 
         for mut entry in entries {
             let d1 = self.metric.distance(&entry.object, &p1);
@@ -305,28 +309,27 @@ impl MTree {
             }
         }
 
-        let left_radius = left_entries.iter().map(|e| e.dist_to_parent + e.covering_radius).fold(0.0_f64, f64::max);
-        let right_radius = right_entries.iter().map(|e| e.dist_to_parent + e.covering_radius).fold(0.0_f64, f64::max);
+        let left_radius = left_entries.iter().map(|e| e.dist_to_parent + e.covering_radius).fold(T::zero(), |a, b| a.max(b));
+        let right_radius = right_entries.iter().map(|e| e.dist_to_parent + e.covering_radius).fold(T::zero(), |a, b| a.max(b));
 
         let left_count: usize = left_entries.iter().map(|e| self.nodes[e.child_idx].count()).sum();
         let right_count: usize = right_entries.iter().map(|e| self.nodes[e.child_idx].count()).sum();
 
-        self.nodes[node_idx] = MNode::Internal { 
-            parent_dist: 0.0, 
+        self.nodes[node_idx] = MNode::Internal {
+            parent_dist: T::zero(),
             count: left_count,
-            entries: 
-            left_entries 
+            entries: left_entries
         };
-        
-        self.nodes.push(MNode::Internal { 
-            parent_dist: 0.0, 
+
+        self.nodes.push(MNode::Internal {
+            parent_dist: T::zero(),
             count: right_count,
-            entries: right_entries 
+            entries: right_entries
         });
 
         let right_idx = self.nodes.len() - 1;
-        let left_entry = RoutingEntry { object: p1, covering_radius: left_radius, dist_to_parent: 0.0, child_idx: node_idx };
-        let right_entry = RoutingEntry { object: p2, covering_radius: right_radius, dist_to_parent: 0.0, child_idx: right_idx };
+        let left_entry = RoutingEntry { object: p1, covering_radius: left_radius, dist_to_parent: T::zero(), child_idx: node_idx };
+        let right_entry = RoutingEntry { object: p2, covering_radius: right_radius, dist_to_parent: T::zero(), child_idx: right_idx };
 
         (left_entry, right_entry)
     }
@@ -335,9 +338,9 @@ impl MTree {
     fn knn_recursive_inner(
         &self,
         node_idx: usize,
-        query: &[f64],
-        d_query_parent: f64,
-        heap: &mut BinaryHeap<HeapItem>,
+        query: &[T],
+        d_query_parent: T,
+        heap: &mut BinaryHeap<HeapItem<T>>,
         k: usize,
     ) {
         match &self.nodes[node_idx] {
@@ -346,9 +349,9 @@ impl MTree {
                     let lb = if d_query_parent.is_finite() {
                         (d_query_parent - entry.dist_to_parent).abs()
                     } else {
-                        0.0
+                        T::zero()
                     };
-                    let best = heap.peek().map(|h| h.distance).unwrap_or(f64::MAX);
+                    let best = heap.peek().map(|h| h.distance).unwrap_or(T::infinity());
                     if heap.len() == k && lb > best {
                         continue;
                     }
@@ -363,24 +366,24 @@ impl MTree {
                 }
             }
             MNode::Internal { entries, .. } => {
-                let mut children: Vec<(f64, f64, usize)> = Vec::with_capacity(entries.len());
+                let mut children: Vec<(T, T, usize)> = Vec::with_capacity(entries.len());
 
                 for entry in entries {
                     let lb = if d_query_parent.is_finite() {
                         (d_query_parent - entry.dist_to_parent).abs()
                     } else {
-                        0.0
+                        T::zero()
                     };
-                    let lb_child = (lb - entry.covering_radius).max(0.0);
-                    let best = heap.peek().map(|h| h.distance).unwrap_or(f64::MAX);
+                    let lb_child = (lb - entry.covering_radius).max(T::zero());
+                    let best = heap.peek().map(|h| h.distance).unwrap_or(T::infinity());
                     if heap.len() == k && lb_child > best {
                         continue;
                     }
 
                     let d_real = self.metric.distance(query, &entry.object);
-                    let min_dist_real = (d_real - entry.covering_radius).max(0.0);
+                    let min_dist_real = (d_real - entry.covering_radius).max(T::zero());
 
-                    let best = heap.peek().map(|h| h.distance).unwrap_or(f64::MAX);
+                    let best = heap.peek().map(|h| h.distance).unwrap_or(T::infinity());
                     if heap.len() == k && min_dist_real > best {
                         continue;
                     }
@@ -391,11 +394,10 @@ impl MTree {
                 children.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
                 for (min_dist_reduced, d_to_routing_real, child_idx) in children {
-                    let best = heap.peek().map(|h| h.distance).unwrap_or(f64::MAX);
+                    let best = heap.peek().map(|h| h.distance).unwrap_or(T::infinity());
                     if heap.len() == k && min_dist_reduced > best {
                         break;
                     }
-
                     self.knn_recursive_inner(child_idx, query, d_to_routing_real, heap, k);
                 }
             }
@@ -405,10 +407,10 @@ impl MTree {
     fn radius_recursive_inner(
         &self,
         node_idx: usize,
-        query: &[f64],
-        d_query_parent: f64,
-        radius: f64,
-        results: &mut Vec<(usize, f64)>,
+        query: &[T],
+        d_query_parent: T,
+        radius: T,
+        results: &mut Vec<(usize, T)>,
     ) {
         match &self.nodes[node_idx] {
             MNode::Leaf { entries, .. } => {
@@ -416,7 +418,7 @@ impl MTree {
                     let lb = if d_query_parent.is_finite() {
                         (d_query_parent - entry.dist_to_parent).abs()
                     } else {
-                        0.0
+                        T::zero()
                     };
                     if lb > radius {
                         continue;
@@ -433,16 +435,16 @@ impl MTree {
                     let lb = if d_query_parent.is_finite() {
                         (d_query_parent - entry.dist_to_parent).abs()
                     } else {
-                        0.0
+                        T::zero()
                     };
 
-                    let lb_child = (lb - entry.covering_radius).max(0.0);
+                    let lb_child = (lb - entry.covering_radius).max(T::zero());
                     if lb_child > radius {
                         continue;
                     }
 
                     let d_real = self.metric.distance(query, &entry.object);
-                    let min_dist_real = (d_real - entry.covering_radius).max(0.0);
+                    let min_dist_real = (d_real - entry.covering_radius).max(T::zero());
                     if min_dist_real > radius {
                         continue;
                     }
@@ -456,8 +458,8 @@ impl MTree {
     fn kde_recursive_inner(
         &self,
         node_idx: usize,
-        query: &[f64],
-        d_query_parent: f64,
+        query: &[T],
+        d_query_parent: T,
         h: f64,
         density: &mut f64,
         kernel: KernelType,
@@ -465,59 +467,61 @@ impl MTree {
         match &self.nodes[node_idx] {
             MNode::Leaf { entries, .. } => {
                 for entry in entries {
-                    let lb = if d_query_parent.is_finite() {
-                        (d_query_parent - entry.dist_to_parent).abs()
+                    let lb: f64 = if d_query_parent.is_finite() {
+                        (d_query_parent - entry.dist_to_parent).abs().to_f64().unwrap()
                     } else {
                         0.0
                     };
-                    
+
                     //single point so don't need to multiply by n
                     if kernel.evaluate(lb, h) < 1e-10 {
                         continue;
                     }
 
-                    let dist = self.metric.distance(query, &entry.object);
+                    let dist: f64 = self.metric.distance(query, &entry.object).to_f64().unwrap();
                     *density += kernel.evaluate(dist, h);
                 }
             }
             MNode::Internal { entries, .. } => {
                 for entry in entries {
-                    let lb = if d_query_parent.is_finite() {
-                        (d_query_parent - entry.dist_to_parent).abs()
+                    let lb: f64 = if d_query_parent.is_finite() {
+                        (d_query_parent - entry.dist_to_parent).abs().to_f64().unwrap()
                     } else {
                         0.0
                     };
-                    let min_dist_lb = (lb - entry.covering_radius).max(0.0);
+                    let covering_r_f64 = entry.covering_radius.to_f64().unwrap();
+                    let min_dist_lb = (lb - covering_r_f64).max(0.0);
                     let n = self.nodes[entry.child_idx].count() as f64;
-                    
+
                     if kernel.evaluate(min_dist_lb, h) * n < 1e-10 {
                         continue;
                     }
 
-                    let d = self.metric.distance(query, &entry.object);
-                    let min_dist = (d - entry.covering_radius).max(0.0);
-                    
+                    let d_real = self.metric.distance(query, &entry.object);
+                    let min_dist = (d_real.to_f64().unwrap() - covering_r_f64).max(0.0);
+
                     if kernel.evaluate(min_dist, h) * n < 1e-10 {
                         continue;
                     }
 
-                    self.kde_recursive_inner(entry.child_idx, query, d, h, density, kernel);
+                    self.kde_recursive_inner(entry.child_idx, query, d_real, h, density, kernel);
                 }
             }
         }
     }
 }
 
-impl SpatialTree for MTree {
-    type Node = MNode;
+impl<T: IronFloat> SpatialTree for MTree<T> {
+    type Node = MNode<T>;
+    type Float = T;
     const REDUCED: bool = false;
-    //most stuff is overriden so most helpers are uneeded
-    fn nodes(&self) -> &[MNode] { &self.nodes }
+    //most stuff is overridden so most helpers are unneeded
+    fn nodes(&self) -> &[MNode<T>] { &self.nodes }
     fn indices(&self) -> &[usize] { &[] }
-    fn data(&self) -> &[f64] { &[] }
+    fn data(&self) -> &[T] { &[] }
     fn dim(&self) -> usize { self.dim }
     fn metric(&self) -> &DistanceMetric { &self.metric }
-    fn n_points(&self) -> usize {self.n_points}
+    fn n_points(&self) -> usize { self.n_points }
     // MTree stores points inside node entries rather than a flat data buffer,
     // so `get_point` is never called — this value is irrelevant.
     fn data_is_reordered(&self) -> bool { true }
@@ -539,37 +543,37 @@ impl SpatialTree for MTree {
         }
     }
 
-    fn min_distance_to_node(&self, node_idx: usize, query: &[f64]) -> f64 {
+    fn min_distance_to_node(&self, node_idx: usize, query: &[T]) -> T {
         match &self.nodes[node_idx] {
             MNode::Internal { entries, .. } => {
                 entries.iter().map(|e| {
                     let d = self.metric.distance(query, &e.object);
-                    (d - e.covering_radius).max(0.0)
-                }).fold(f64::MAX, f64::min)
+                    (d - e.covering_radius).max(T::zero())
+                }).fold(T::infinity(), |a, b| a.min(b))
             }
             MNode::Leaf { entries, .. } => {
                 entries.iter().map(|e| self.metric.distance(query, &e.object))
-                    .fold(f64::MAX, f64::min)
+                    .fold(T::infinity(), |a, b| a.min(b))
             }
         }
     }
 }
 
 
-impl KnnQuery for MTree {
-    fn query_knn_recursive(&self, node_idx: usize, query: &[f64], heap: &mut BinaryHeap<HeapItem>, k: usize) {
-        self.knn_recursive_inner(node_idx, query, f64::INFINITY, heap, k);
+impl<T: IronFloat> KnnQuery for MTree<T> {
+    fn query_knn_recursive(&self, node_idx: usize, query: &[T], heap: &mut BinaryHeap<HeapItem<T>>, k: usize) {
+        self.knn_recursive_inner(node_idx, query, T::infinity(), heap, k);
     }
 }
 
-impl RadiusQuery for MTree {
-    fn query_radius_recursive(&self, node_idx: usize, query: &[f64], radius: f64, results: &mut Vec<(usize, f64)>) {
-        self.radius_recursive_inner(node_idx, query, f64::INFINITY, radius, results);
+impl<T: IronFloat> RadiusQuery for MTree<T> {
+    fn query_radius_recursive(&self, node_idx: usize, query: &[T], radius: T, results: &mut Vec<(usize, T)>) {
+        self.radius_recursive_inner(node_idx, query, T::infinity(), radius, results);
     }
 }
 
-impl KdeQuery for MTree {
-    fn kde_recursive(&self, node_idx: usize, query: &[f64], h: f64, density: &mut f64, kernel: KernelType) {
-        self.kde_recursive_inner(node_idx, query, f64::INFINITY, h, density, kernel);
+impl<T: IronFloat> KdeQuery for MTree<T> {
+    fn kde_recursive(&self, node_idx: usize, query: &[T], h: f64, density: &mut f64, kernel: KernelType) {
+        self.kde_recursive_inner(node_idx, query, T::infinity(), h, density, kernel);
     }
 }

@@ -5,7 +5,7 @@ use crate::spatial::SpatialTree;
 const RAD_PAR_THRESHOLD: usize = 512;
 
 pub trait RadiusQuery: SpatialTree {
-    fn query_radius(&self, query: &[f64], radius: f64) -> Vec<(usize, f64)> {
+    fn query_radius(&self, query: &[Self::Float], radius: Self::Float) -> Vec<(usize, Self::Float)> {
         let mut results = Vec::new();
         let rad = match Self::REDUCED {
             true => self.metric().to_reduced(radius),
@@ -15,7 +15,7 @@ pub trait RadiusQuery: SpatialTree {
         results
     }
 
-    fn query_radius_recursive(&self, node_idx: usize, query: &[f64], radius: f64, results: &mut Vec<(usize, f64)>) {
+    fn query_radius_recursive(&self, node_idx: usize, query: &[Self::Float], radius: Self::Float, results: &mut Vec<(usize, Self::Float)>) {
         if self.min_distance_to_node(node_idx, query) > radius {
             return;
         }
@@ -41,7 +41,7 @@ pub trait RadiusQuery: SpatialTree {
         }
     }
 
-    fn query_radius_batch(&self, queries: &NdArray<f64>, radius: f64) -> Vec<Vec<(usize, f64)>> {
+    fn query_radius_batch(&self, queries: &NdArray<Self::Float>, radius: Self::Float) -> Vec<Vec<(usize, Self::Float)>> {
         let shape = queries.shape().dims();
         assert!(shape.len() == 2, "Expected 2D array (n_queries, dim)");
         let n_queries = shape[0];
@@ -49,7 +49,7 @@ pub trait RadiusQuery: SpatialTree {
         assert_eq!(dim, self.dim(), "Query dimension must match tree dimension");
 
         let queries_cow = queries.as_contiguous_slice();
-        let queries_slice: &[f64] = &queries_cow;
+        let queries_slice: &[Self::Float] = &queries_cow;
         if n_queries >= RAD_PAR_THRESHOLD {
             self.par_radius_batch(queries_slice, n_queries, dim, radius)
         } else {
@@ -57,7 +57,7 @@ pub trait RadiusQuery: SpatialTree {
         }
     }
 
-    fn seq_radius_batch(&self, queries: &[f64], n_queries: usize, dim: usize, radius: f64) -> Vec<Vec<(usize, f64)>> {
+    fn seq_radius_batch(&self, queries: &[Self::Float], n_queries: usize, dim: usize, radius: Self::Float) -> Vec<Vec<(usize, Self::Float)>> {
         (0..n_queries)
             .map(|i| {
                 let query = &queries[i * dim..(i + 1) * dim];
@@ -66,7 +66,7 @@ pub trait RadiusQuery: SpatialTree {
             .collect()
     }
 
-    fn par_radius_batch(&self, queries: &[f64], n_queries: usize, dim: usize, radius: f64) -> Vec<Vec<(usize, f64)>> {
+    fn par_radius_batch(&self, queries: &[Self::Float], n_queries: usize, dim: usize, radius: Self::Float) -> Vec<Vec<(usize, Self::Float)>> {
         (0..n_queries)
             .into_par_iter()
             .map(|i| {
