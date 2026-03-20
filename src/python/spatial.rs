@@ -370,10 +370,13 @@ macro_rules! knn_body {
 }
 
 macro_rules! ann_body {
-    ($tree:expr, $queries_arr:expr, $is_batch:expr, $k:expr, $n_candidates:expr) => {{
+    ($tree:expr, $queries_arr:expr, $is_batch:expr, $k:expr, $n_candidates:expr, $n_probes:expr) => {{
         let n_queries = $queries_arr.shape().dims()[0];
         if $is_batch {
-            let results = $tree.query_ann_batch(&$queries_arr, $k, $n_candidates);
+            let results = match $n_probes {
+                Some(n_probes) => $tree.query_ann_stochastic_batch(&$queries_arr, $k, $n_candidates, n_probes),
+                None => $tree.query_ann_batch(&$queries_arr, $k, $n_candidates),
+            };
             let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
                 .flatten()
                 .map(|(i, d)| (i as i64, d.to_f64().unwrap()))
@@ -381,7 +384,10 @@ macro_rules! ann_body {
             Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, $k))
         } else {
             let query_slice = &$queries_arr.as_slice_unchecked()[..$tree.dim];
-            let results = $tree.query_ann(query_slice, $k, $n_candidates);
+            let results = match $n_probes {
+                Some(n_probes) => $tree.query_ann_stochastic(query_slice, $k, $n_candidates, n_probes),
+                None => $tree.query_ann(query_slice, $k, $n_candidates),
+            };
             let (indices, distances): (Vec<i64>, Vec<f64>) = results.into_iter()
                 .map(|(i, d)| (i as i64, d.to_f64().unwrap())).unzip();
             Ok(PySpatialResult::from_single(indices, distances))
@@ -453,8 +459,14 @@ macro_rules! impl_ann_query {
     ($py_type:ty) => {
         #[pymethods]
         impl $py_type {
-            #[pyo3(signature = (query, k, n_candidates=None))]
-            fn query_ann(&self, query: ArrayLike, k: usize, n_candidates: Option<usize>) -> PyResult<PySpatialResult> {
+            #[pyo3(signature = (query, k, n_candidates=None, n_probes=None))]
+            fn query_ann(
+                &self,
+                query: ArrayLike,
+                k: usize,
+                n_candidates: Option<usize>,
+                n_probes: Option<usize>,
+            ) -> PyResult<PySpatialResult> {
                 let n_candidates = n_candidates.unwrap_or(k * 2);
                 let is_batch = query.ndim() == 2;
                 let inner = self.inner.as_ref()
@@ -462,11 +474,11 @@ macro_rules! impl_ann_query {
                 match inner {
                     SpatialInner::F64(tree) => {
                         let q = query.into_spatial_query_ndarray(tree.dim)?;
-                        ann_body!(tree, q, is_batch, k, n_candidates)
+                        ann_body!(tree, q, is_batch, k, n_candidates, n_probes)
                     }
                     SpatialInner::F32(tree) => {
                         let q = query.into_f32_spatial_query_ndarray(tree.dim)?;
-                        ann_body!(tree, q, is_batch, k, n_candidates)
+                        ann_body!(tree, q, is_batch, k, n_candidates, n_probes)
                     }
                 }
             }

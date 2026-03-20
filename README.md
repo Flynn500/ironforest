@@ -44,7 +44,7 @@ You can also build with `maturin build --release` assuming maturin is and rust a
 The main things I need to finish before 1.0 are improving compatibility with the wider python ecosystem and improving the robustness of my algorithms. Main goals are:
 - Adding buffer protocols (DONE)
 - Integration with pandas and polars (DONE)
-- f16 & f32 intergration
+- f16 & f32 intergration (DONE)
 - NaN handling
 - Spatial & RPForest objects
 

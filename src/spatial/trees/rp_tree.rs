@@ -332,4 +332,6 @@ impl<T: IronFloat> RadiusQuery for RPTree<T> {
     }
 }
 
-impl<T: IronFloat> AnnQuery for RPTree<T> {}
+impl<T: IronFloat> AnnQuery for RPTree<T> {
+
+}

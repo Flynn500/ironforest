@@ -206,7 +206,7 @@ class BallTree:
         """
         ...
 
-    def query_ann(self, query: ArrayLike, k: int, n_candidates: int) -> SpatialResult:
+    def query_ann(self, query: ArrayLike, k: int, n_candidates: int,  n_probes: int | None = None) -> SpatialResult:
         """Find the approximate k nearest neighbors to the query point.
 
         Args:
@@ -319,7 +319,7 @@ class KDTree:
         """Find the k nearest neighbors to the query point."""
         ...
 
-    def query_ann(self, query: ArrayLike, k: int, n_candidates: int) -> SpatialResult:
+    def query_ann(self, query: ArrayLike, k: int, n_candidates: int,  n_probes: int | None = None) -> SpatialResult:
         """Find the approximate k nearest neighbors to the query point."""
         ...
 
@@ -500,7 +500,7 @@ class RPTree:
         """Find the k nearest neighbors to the query point."""
         ...
 
-    def query_ann(self, query: ArrayLike, k: int, n_candidates: int) -> SpatialResult:
+    def query_ann(self, query: ArrayLike, k: int, n_candidates: int, n_probes: int | None = None) -> SpatialResult:
         """Find the approximate k nearest neighbors to the query point."""
         ...
 
