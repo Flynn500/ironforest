@@ -100,6 +100,7 @@ impl<T: IronFloat> BallTree<T> {
                 max_dist = dist;
             }
         }
+        max_dist = max_dist * (T::one() + T::from(1e-8).unwrap());
         (centroid, max_dist)
     }
 
@@ -209,14 +210,14 @@ impl<T: IronFloat> SpatialTree for BallTree<T> {
     fn node_left(&self, idx: usize) -> Option<usize> { self.nodes[idx].left }
     fn node_right(&self, idx: usize) -> Option<usize> { self.nodes[idx].right }
 
-    fn min_distance_to_node(&self, node_idx: usize, query: &[T]) -> T {
-        let node = &self.nodes[node_idx];
+    fn child_lower_bound(&self, child_idx: usize, query: &[Self::Float]) -> Self::Float {
+        let node = &self.nodes[child_idx];
         let d = self.metric.post_transform(self.metric.reduced_distance(query, &node.center));
         let min_real = (d - node.radius).max(T::zero());
-        self.metric.to_reduced(min_real)
+        self.metric.to_reduced(min_real)  
     }
 
-    fn knn_child_order(&self, node_idx: usize, query: &[T]) -> (usize, usize) {
+    fn traversal_order(&self, node_idx: usize, query: &[Self::Float]) -> (usize, usize) {
         let node = &self.nodes[node_idx];
         let (l, r) = (node.left.unwrap(), node.right.unwrap());
         let dl = self.metric.reduced_distance(query, &self.nodes[l].center);

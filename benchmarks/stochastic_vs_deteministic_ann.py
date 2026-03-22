@@ -2,7 +2,7 @@ import numpy as np
 import time
 import ironforest as irn
 from ironforest import spatial
-
+import matplotlib.pyplot as plt
 
 # --- Config ---
 LEAF_SIZE = 200
@@ -118,6 +118,62 @@ def print_results(dim, rows):
             f"{r['recall']:>7.3f} {r['time_ms']:>9.2f}"
         )
 
+def make_blobs(n_points, n_queries, dim, n_clusters=10, cluster_std=0.05, seed=42):
+    rng = np.random.default_rng(seed)
+
+    centers = rng.uniform(0, 1, size=(n_clusters, dim))
+
+    point_clusters = rng.integers(0, n_clusters, size=n_points)
+    query_clusters = rng.integers(0, n_clusters, size=n_queries)
+
+    data = centers[point_clusters] + rng.normal(0, cluster_std, size=(n_points, dim))
+    queries = centers[query_clusters] + rng.normal(0, cluster_std, size=(n_queries, dim))
+
+    return data.astype(np.float64), queries.astype(np.float64)
+
+def plot_pareto(dim, rows):
+    """Plot recall vs time for deterministic vs stochastic methods."""
+    fig, ax = plt.subplots(figsize=(8,5))
+    
+    for method in ["deterministic", "stochastic"]:
+        method_rows = [r for r in rows if r["method"] == method]
+        times = [r["time_ms"] for r in method_rows]
+        recalls = [r["recall"] for r in method_rows]
+        ax.scatter(times, recalls, label=method, alpha=0.7)
+    
+    ax.set_title(f"ANN Recall vs Query Time (dim={dim})")
+    ax.set_xlabel("Query Time (ms)")
+    ax.set_ylabel("Recall")
+    ax.legend()
+    ax.grid(True)
+    plt.tight_layout()
+    plt.show()
+    plt.savefig(f"{dim}pareto.png")
+
+def run_benchmarks_blobs():
+    print("=== ANN Benchmark (Clustered Blobs) ===")
+
+    for dim in DIMS:
+        n_clusters = max(5, dim // 2)
+
+        data, queries = make_blobs(
+            N_POINTS,
+            N_QUERIES,
+            dim,
+            n_clusters=n_clusters,
+            cluster_std=0.05,
+            seed=42
+        )
+
+        ref_indices = brute_force_knn(data, queries, K)
+
+        rows = benchmark_dim(dim, data, queries, ref_indices)
+        print_results(dim, rows)
+        plot_pareto(dim, rows)
+    print("\n=== Done (Blobs) ===")
+    
+
+
 
 def run_benchmarks():
     rng = np.random.default_rng(42)
@@ -135,4 +191,5 @@ def run_benchmarks():
 
 
 if __name__ == "__main__":
-    run_benchmarks()
+    run_benchmarks_blobs()
+    

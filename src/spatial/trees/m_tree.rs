@@ -543,8 +543,8 @@ impl<T: IronFloat> SpatialTree for MTree<T> {
         }
     }
 
-    fn min_distance_to_node(&self, node_idx: usize, query: &[T]) -> T {
-        match &self.nodes[node_idx] {
+    fn child_lower_bound(&self, child_idx: usize, query: &[Self::Float]) -> Self::Float {
+        match &self.nodes[child_idx] {
             MNode::Internal { entries, .. } => {
                 entries.iter().map(|e| {
                     let d = self.metric.distance(query, &e.object);

@@ -1,12 +1,8 @@
-use std::collections::BinaryHeap;
-
-use crate::{Generator, array::{NdArray, Shape}, projection::{ProjectionType, RandomProjection, random_projection::ProjectionDirection}, spatial::{HeapItem, common::{DistanceMetric, IronFloat}}};
+use crate::{Generator, array::{NdArray, Shape}, projection::{ProjectionType, RandomProjection, random_projection::ProjectionDirection}, spatial::{HeapItem, common::{DistanceMetric, IronFloat}, spatial_tree::{ChildTraversal, TraversalPlan}}};
 use crate::spatial::queries::{KnnQuery, RadiusQuery, AnnQuery};
 use crate::spatial::SpatialTree;
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
-const KNN_PAR_THRESHOLD: usize = 512;
 
 // RPNode stores the split value and projection direction in f64 regardless of
 // the tree's data type. Projections are fundamentally f64 computations currently.
@@ -132,155 +128,6 @@ impl<T: IronFloat> RPTree<T> {
 
         node_idx
     }
-
-    fn knn_recursive_inner(
-        &self,
-        node_idx: usize,
-        query: &[T],
-        heap: &mut BinaryHeap<HeapItem<T>>,
-        k: usize,
-    ) {
-        let node = &self.nodes[node_idx];
-
-        if node.left.is_none() {
-            for i in node.start..node.end {
-                let dist = self.metric.reduced_distance(query, self.get_point(i));
-                if heap.len() < k {
-                    heap.push(HeapItem { distance: dist, index: self.indices[i] });
-                } else if dist < heap.peek().unwrap().distance {
-                    heap.pop();
-                    heap.push(HeapItem { distance: dist, index: self.indices[i] });
-                }
-            }
-            return;
-        }
-
-        let (first, second, margin) = self.node_projection(node_idx, query);
-
-        self.knn_recursive_inner(first, query, heap, k);
-
-        let dominated = heap.len() == k
-            && margin >= heap.peek().unwrap().distance;
-        if !dominated {
-            self.knn_recursive_inner(second, query, heap, k);
-        }
-    }
-
-    fn ann_candidates_inner_rp(
-        &self,
-        query: &[T],
-        k: usize,
-        n_candidates: usize,
-    ) -> Vec<(usize, T)> {
-        let mut queue: BinaryHeap<std::cmp::Reverse<HeapItem<T>>> = BinaryHeap::new();
-        let mut candidates: BinaryHeap<HeapItem<T>> = BinaryHeap::new();
-
-        queue.push(std::cmp::Reverse(HeapItem { distance: T::zero(), index: 0 }));
-
-        while let Some(std::cmp::Reverse(HeapItem { distance: node_dist, index: node_idx })) = queue.pop() {
-            if candidates.len() >= k {
-                let worst_k = candidates.peek().unwrap().distance;
-                if node_dist > worst_k {
-                    break;
-                }
-            }
-
-            let node = &self.nodes[node_idx];
-
-            if node.left.is_none() {
-                for i in node.start..node.end {
-                    let dist = self.metric.reduced_distance(query, self.get_point(i));
-                    if candidates.len() < n_candidates {
-                        candidates.push(HeapItem { distance: dist, index: self.indices[i] });
-                    } else if dist < candidates.peek().unwrap().distance {
-                        candidates.pop();
-                        candidates.push(HeapItem { distance: dist, index: self.indices[i] });
-                    }
-                }
-                if candidates.len() >= n_candidates {
-                    break;
-                }
-            } else {
-                let (first, second, margin_sq) = self.node_projection(node_idx, query);
-                queue.push(std::cmp::Reverse(HeapItem { distance: T::zero(), index: first }));
-                queue.push(std::cmp::Reverse(HeapItem { distance: margin_sq, index: second }));
-            }
-        }
-
-        let mut results: Vec<(usize, T)> = candidates.into_iter()
-            .map(|item| (item.index, item.distance))
-            .collect();
-        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        results.truncate(k);
-        results
-    }
-
-    fn seq_ann_batch(&self, queries: &[T], n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, T)>> {
-        (0..n_queries)
-            .map(|i| {
-                let query = &queries[i * dim..(i + 1) * dim];
-                self.query_ann(query, k, n_candidates)
-            })
-            .collect()
-    }
-
-    fn par_ann_batch(&self, queries: &[T], n_queries: usize, dim: usize, k: usize, n_candidates: usize) -> Vec<Vec<(usize, T)>> {
-        (0..n_queries)
-            .into_par_iter()
-            .map(|i| {
-                let query = &queries[i * dim..(i + 1) * dim];
-                self.query_ann(query, k, n_candidates)
-            })
-            .collect()
-    }
-
-    pub fn query_ann_batch(&self, queries: &NdArray<T>, k: usize, n_candidates: usize) -> Vec<Vec<(usize, T)>> {
-        let shape = queries.shape().dims();
-        assert!(shape.len() == 2, "Expected 2D array (n_queries, dim)");
-        let n_queries = shape[0];
-        let dim = shape[1];
-        assert_eq!(dim, self.dim(), "Query dimension must match tree dimension");
-
-        let queries_cow = queries.as_contiguous_slice();
-        let queries_slice: &[T] = &queries_cow;
-        if n_queries >= KNN_PAR_THRESHOLD {
-            self.par_ann_batch(queries_slice, n_queries, dim, k, n_candidates)
-        } else {
-            self.seq_ann_batch(queries_slice, n_queries, dim, k, n_candidates)
-        }
-    }
-
-    pub fn query_ann(&self, query: &[T], k: usize, n_candidates: usize) -> Vec<(usize, T)> {
-        self.ann_candidates_inner_rp(query, k, n_candidates.max(k))
-    }
-
-    fn radius_recursive_inner(
-        &self,
-        node_idx: usize,
-        query: &[T],
-        radius: T,
-        results: &mut Vec<(usize, T)>,
-    ) {
-        let node = &self.nodes[node_idx];
-
-        if node.left.is_none() {
-            for i in node.start..node.end {
-                let dist = self.metric.reduced_distance(query, self.get_point(i));
-                if dist <= radius {
-                    results.push((self.indices[i], dist));
-                }
-            }
-            return;
-        }
-
-        let (first, second, margin_sq) = self.node_projection(node_idx, query);
-
-        self.radius_recursive_inner(first, query, radius, results);
-
-        if margin_sq <= radius {
-            self.radius_recursive_inner(second, query, radius, results);
-        }
-    }
 }
 
 
@@ -302,34 +149,35 @@ impl<T: IronFloat> SpatialTree for RPTree<T> {
     fn node_left(&self, idx: usize) -> Option<usize> { self.nodes[idx].left }
     fn node_right(&self, idx: usize) -> Option<usize> { self.nodes[idx].right }
 
-    fn min_distance_to_node(&self, node_idx: usize, query: &[T]) -> T {
-        let node = &self.nodes[node_idx];
-        let proj = node.direction.project_t(query);
-        T::from((proj - node.split).abs()).unwrap()
-    }
-
-    fn knn_child_order(&self, _node_idx: usize, _query: &[T]) -> (usize, usize) { (0, 0) }
-
-    fn node_projection(&self, node_idx: usize, query: &[T]) -> (usize, usize, T) {
+    fn child_lower_bound(&self, _child_idx: usize, _query: &[T]) -> T { T::zero() }
+    fn traversal_order(&self, node_idx: usize, query: &[T]) -> (usize, usize) {
         let node = &self.nodes[node_idx];
         let (l, r) = (node.left.unwrap(), node.right.unwrap());
         let proj = node.direction.project_t(query);
-        let dist = (proj - node.split).abs();
+        if proj <= node.split { (l, r) } else { (r, l) }
+    }
+
+    fn plan_traversal(&self, node_idx: usize, query: &[T]) -> TraversalPlan<T> {
+        let node = &self.nodes[node_idx];
+        let (l, r) = (node.left.unwrap(), node.right.unwrap());
+        let proj = node.direction.project_t(query);
+        let bound = T::from((proj - node.split).abs().powi(2)).unwrap();
+
         let (first, second) = if proj <= node.split { (l, r) } else { (r, l) };
-        (first, second, T::from(dist * dist).unwrap())
+
+        TraversalPlan {
+            first: ChildTraversal { child_idx: first, lower_bound: T::zero() },
+            second: ChildTraversal { child_idx: second, lower_bound: bound },
+        }
     }
 }
 
 impl<T: IronFloat> KnnQuery for RPTree<T> {
-    fn query_knn_recursive(&self, node_idx: usize, query: &[T], heap: &mut BinaryHeap<HeapItem<T>>, k: usize) {
-        self.knn_recursive_inner(node_idx, query, heap, k)
-    }
+
 }
 
 impl<T: IronFloat> RadiusQuery for RPTree<T> {
-    fn query_radius_recursive(&self, node_idx: usize, query: &[T], radius: T, results: &mut Vec<(usize, T)>) {
-        self.radius_recursive_inner(node_idx, query, radius, results);
-    }
+
 }
 
 impl<T: IronFloat> AnnQuery for RPTree<T> {

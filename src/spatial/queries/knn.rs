@@ -27,14 +27,19 @@ pub trait KnnQuery: SpatialTree {
             .collect()
     }
 
-    fn query_knn_recursive(&self, node_idx: usize, query: &[Self::Float], heap: &mut BinaryHeap<HeapItem<Self::Float>>, k: usize) {
-        if self.node_left(node_idx).is_none() {
+    fn query_knn_recursive(
+        &self,
+        node_idx: usize,
+        query: &[Self::Float],
+        heap: &mut BinaryHeap<HeapItem<Self::Float>>,
+        k: usize,
+    ) {
+        if self.is_leaf(node_idx) {
             for i in self.node_start(node_idx)..self.node_end(node_idx) {
                 let dist = match Self::REDUCED {
                     true => self.metric().reduced_distance(query, self.get_point(i)),
                     false => self.metric().distance(query, self.get_point(i)),
                 };
-
                 if heap.len() < k {
                     heap.push(HeapItem { distance: dist, index: self.indices()[i] });
                 } else if dist < heap.peek().unwrap().distance {
@@ -45,22 +50,17 @@ pub trait KnnQuery: SpatialTree {
             return;
         }
 
-        let (first, second, node_dist) = self.node_projection(node_idx, query);
-
+        let plan = self.plan_traversal(node_idx, query);
         let threshold = heap.peek().map(|t| t.distance).unwrap_or(Self::Float::infinity());
 
-        if heap.len() == k && node_dist > threshold {
-            return;
+        if heap.len() < k || plan.first.lower_bound <= threshold {
+            self.query_knn_recursive(plan.first.child_idx, query, heap, k);
         }
 
-        let first_dist = self.min_distance_to_node(first, query);
-        if heap.len() < k || first_dist <= threshold {
-            self.query_knn_recursive(first, query, heap, k);
-        }
+        let second_bound = self.child_lower_bound(plan.second.child_idx, query);
 
-        let second_dist = self.min_distance_to_node(second, query);
-        if heap.len() < k || second_dist <= threshold {
-            self.query_knn_recursive(second, query, heap, k);
+        if heap.len() < k || second_bound <= threshold {
+            self.query_knn_recursive(plan.second.child_idx, query, heap, k);
         }
     }
 

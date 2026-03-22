@@ -77,9 +77,9 @@ impl<T: IronFloat> SpatialTree for BruteForce<T> {
     fn node_left(&self, _idx: usize) -> Option<usize> { None }
     fn node_right(&self, _idx: usize) -> Option<usize> { None }
 
-    fn min_distance_to_node(&self, _node_idx: usize, _query: &[T]) -> T { T::zero() }
+    fn child_lower_bound(&self, _child_idx: usize, _query: &[Self::Float]) -> Self::Float { T::zero() }
 
-    fn knn_child_order(&self, _node_idx: usize, _query: &[T]) -> (usize, usize) {
+    fn traversal_order(&self, _node_idx: usize, _query: &[Self::Float]) -> (usize, usize) {
         unreachable!("BruteForce has no tree structure")
     }
 }

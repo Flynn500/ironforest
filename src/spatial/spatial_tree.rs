@@ -1,5 +1,14 @@
 use crate::spatial::common::{DistanceMetric, IronFloat};
 
+pub struct ChildTraversal<F> {
+    pub child_idx: usize,
+    pub lower_bound: F,
+}
+
+pub struct TraversalPlan<F> {
+    pub first: ChildTraversal<F>,
+    pub second: ChildTraversal<F>,
+}
 pub trait SpatialTree: Sync {
     type Node;
     type Float: IronFloat;
@@ -18,17 +27,22 @@ pub trait SpatialTree: Sync {
 
     fn root(&self) -> usize { 0 }
 
+    fn is_leaf(&self, idx: usize) -> bool {
+        self.node_left(idx).is_none()
+    }
 
-    fn min_distance_to_node(&self, node_idx: usize, query: &[Self::Float]) -> Self::Float;
+    fn child_lower_bound(&self, child_idx: usize, query: &[Self::Float]) -> Self::Float;
 
-    fn knn_child_order(&self, node_idx: usize, _query: &[Self::Float]) -> (usize, usize) {
+    fn traversal_order(&self, node_idx: usize, _query: &[Self::Float]) -> (usize, usize) {
         (self.node_left(node_idx).unwrap(), self.node_right(node_idx).unwrap())
     }
 
-    fn node_projection(&self, node_idx: usize, query: &[Self::Float]) -> (usize, usize, Self::Float) {
-        let dist = self.min_distance_to_node(node_idx, query);
-        let (first, second) = self.knn_child_order(node_idx, query);
-        (first, second, dist)
+    fn plan_traversal(&self, node_idx: usize, query: &[Self::Float]) -> TraversalPlan<Self::Float> {
+        let (first, second) = self.traversal_order(node_idx, query);
+        TraversalPlan {
+            first: ChildTraversal { child_idx: first, lower_bound: self.child_lower_bound(first, query) },
+            second: ChildTraversal { child_idx: second, lower_bound: self.child_lower_bound(second, query) },
+        }
     }
 
     fn data_is_reordered(&self) -> bool;

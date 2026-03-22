@@ -186,15 +186,15 @@ impl<T: IronFloat> SpatialTree for KDTree<T> {
     fn node_left(&self, idx: usize) -> Option<usize> { self.nodes[idx].left }
     fn node_right(&self, idx: usize) -> Option<usize> { self.nodes[idx].right }
 
-    fn min_distance_to_node(&self, node_idx: usize, query: &[T]) -> T {
-        let node = &self.nodes[node_idx];
+    fn child_lower_bound(&self, child_idx: usize, query: &[T]) -> T {
+        let node = &self.nodes[child_idx];
         let clamped: Vec<T> = query.iter().enumerate()
             .map(|(d, &q)| q.max(node.bbox_min[d]).min(node.bbox_max[d]))
             .collect();
         self.metric.reduced_distance(&clamped, query)
     }
 
-    fn knn_child_order(&self, node_idx: usize, query: &[T]) -> (usize, usize) {
+    fn traversal_order(&self, node_idx: usize, query: &[T]) -> (usize, usize) {
         let node = &self.nodes[node_idx];
         let (l, r) = (node.left.unwrap(), node.right.unwrap());
         if query[node.axis] < node.split { (l, r) } else { (r, l) }

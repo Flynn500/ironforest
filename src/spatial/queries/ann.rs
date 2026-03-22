@@ -63,10 +63,16 @@ pub trait AnnQuery: SpatialTree {
                     }
                 }
             } else {
-                let (first, second, margin) = self.node_projection(node_idx, query);
-                
-                queue.push(Reverse(HeapItem { distance: Self::Float::zero(), index: first }));
-                queue.push(Reverse(HeapItem { distance: margin, index: second }));
+                let plan = self.plan_traversal(node_idx, query);
+
+                queue.push(Reverse(HeapItem {
+                    distance: plan.first.lower_bound,
+                    index: plan.first.child_idx,
+                }));
+                queue.push(Reverse(HeapItem {
+                    distance: plan.second.lower_bound,
+                    index: plan.second.child_idx,
+                }));
             }
         }
         let mut results: Vec<(usize, Self::Float)> = candidates.into_iter()
@@ -219,30 +225,30 @@ pub trait AnnQuery: SpatialTree {
                     break;
                 }
             } else {
-                let (first, second, margin) = self.node_projection(node_idx, query);
+                let plan = self.plan_traversal(node_idx, query);
 
                 if let Some(ref mut path) = record_path {
-                    path.push((node_idx, first, second, margin));
+                    path.push((node_idx, plan.first.child_idx, plan.second.child_idx, plan.second.lower_bound));
                 }
 
                 queue.push(Reverse(HeapItem {
                     distance: Self::Float::zero(),
-                    index: first,
+                    index: plan.first.child_idx,
                 }));
 
-                if margin <= bound {
+                if plan.second.lower_bound <= bound {
                     let tau_f64 = tau.to_f64().unwrap();
                     if tau_f64 == 0.0 {
-                        queue.push(Reverse(HeapItem { distance: margin, index: second }));
+                        queue.push(Reverse(HeapItem { distance: plan.second.lower_bound, index: plan.second.child_idx }));
                     } else {
-                        let norm_margin = margin.to_f64().unwrap() / tau_f64;
+                        let norm_margin = plan.second.lower_bound.to_f64().unwrap() / tau_f64;
                         let p = 1.0 / (1.0 + (-norm_margin).exp());
                         let perturbed = if rng.next_f64() < p {
-                            margin
+                            plan.second.lower_bound
                         } else {
                             Self::Float::zero()
                         };
-                        queue.push(Reverse(HeapItem { distance: perturbed, index: second }));
+                        queue.push(Reverse(HeapItem { distance: perturbed, index: plan.second.child_idx }));
                     }
                 }
             }

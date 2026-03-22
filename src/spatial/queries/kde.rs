@@ -33,13 +33,7 @@ pub trait KdeQuery: SpatialTree {
     }
 
     fn kde_recursive(&self, node_idx: usize, query: &[Self::Float], h: f64, density: &mut f64, kernel: KernelType) {
-        let n = (self.node_end(node_idx) - self.node_start(node_idx)) as f64;
-        let min_dist = self.min_distance_to_node(node_idx, query).to_f64().unwrap();
-        if kernel.evaluate(min_dist, h) * n < 1e-10 {
-            return;
-        }
-
-        if self.node_left(node_idx).is_none() {
+        if self.is_leaf(node_idx) {
             for i in self.node_start(node_idx)..self.node_end(node_idx) {
                 let dist: f64 = match Self::REDUCED {
                     true => self.metric().reduced_distance(query, self.get_point(i)).to_f64().unwrap(),
@@ -50,11 +44,16 @@ pub trait KdeQuery: SpatialTree {
             return;
         }
 
-        if let Some(left) = self.node_left(node_idx) {
-            self.kde_recursive(left, query, h, density, kernel);
+        let plan = self.plan_traversal(node_idx, query);
+
+        let first_n = (self.node_end(plan.first.child_idx) - self.node_start(plan.first.child_idx)) as f64;
+        if kernel.evaluate(plan.first.lower_bound.to_f64().unwrap(), h) * first_n >= 1e-10 {
+            self.kde_recursive(plan.first.child_idx, query, h, density, kernel);
         }
-        if let Some(right) = self.node_right(node_idx) {
-            self.kde_recursive(right, query, h, density, kernel);
+
+        let second_n = (self.node_end(plan.second.child_idx) - self.node_start(plan.second.child_idx)) as f64;
+        if kernel.evaluate(plan.second.lower_bound.to_f64().unwrap(), h) * second_n >= 1e-10 {
+            self.kde_recursive(plan.second.child_idx, query, h, density, kernel);
         }
     }
 

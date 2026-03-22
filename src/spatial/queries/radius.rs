@@ -15,12 +15,14 @@ pub trait RadiusQuery: SpatialTree {
         results
     }
 
-    fn query_radius_recursive(&self, node_idx: usize, query: &[Self::Float], radius: Self::Float, results: &mut Vec<(usize, Self::Float)>) {
-        if self.min_distance_to_node(node_idx, query) > radius {
-            return;
-        }
-
-        if self.node_left(node_idx).is_none() {
+    fn query_radius_recursive(
+        &self,
+        node_idx: usize,
+        query: &[Self::Float],
+        radius: Self::Float,
+        results: &mut Vec<(usize, Self::Float)>,
+    ) {
+        if self.is_leaf(node_idx) {
             for i in self.node_start(node_idx)..self.node_end(node_idx) {
                 let dist = match Self::REDUCED {
                     true => self.metric().reduced_distance(query, self.get_point(i)),
@@ -33,11 +35,14 @@ pub trait RadiusQuery: SpatialTree {
             return;
         }
 
-        if let Some(left) = self.node_left(node_idx) {
-            self.query_radius_recursive(left, query, radius, results);
+        let plan = self.plan_traversal(node_idx, query);
+
+        if plan.first.lower_bound <= radius {
+            self.query_radius_recursive(plan.first.child_idx, query, radius, results);
         }
-        if let Some(right) = self.node_right(node_idx) {
-            self.query_radius_recursive(right, query, radius, results);
+
+        if plan.second.lower_bound <= radius {
+            self.query_radius_recursive(plan.second.child_idx, query, radius, results);
         }
     }
 

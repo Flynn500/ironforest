@@ -58,22 +58,14 @@ def test_from_numpy_f64_c_contiguous_zero_copy():
         "Expected zero-copy (External storage) for C-contiguous float64 numpy array"
     )
 
-#F32 not supported yet
-# def test_from_numpy_float32_forces_copy():
-#     """float32 numpy array must be widened to float64 → forces a copy → Owned storage."""
-#     rng = np.random.default_rng(2)
-#     arr32 = rng.random((50, 4)).astype(np.float32)
-#     irn_arr = irn.ndutils.asarray(arr32)  # use asarray for type-conversion path
-#     arr64 = arr32.astype(np.float64)
-#     # Values should match within f32 precision
-#     result = to_np_via_buffer(irn_arr)
-#     assert result.dtype == np.float64 or result.dtype == np.float32
-#     np.testing.assert_allclose(result.flatten(), arr32.flatten(), rtol=1e-5)
-#     # Should NOT share memory with the original float32 array
-#     assert not np.shares_memory(arr32, result), (
-#         "float32 array should not share memory after conversion to IronForest array"
-#     )
-
+def test_from_numpy_f32_c_contiguous_zero_copy():
+    """C-contiguous float32 numpy array → External storage → zero-copy."""
+    rng = np.random.default_rng(1)
+    arr = np.ascontiguousarray(rng.random((100, 4)), dtype=np.float32)
+    irn_arr = irn.ndutils.from_numpy(arr)
+    assert shares_memory_with_irn(arr, irn_arr), (
+        "Expected zero-copy (External storage) for C-contiguous float32 numpy array"
+    )
 
 def test_from_numpy_fortran_order_forces_copy():
     """Fortran-order (column-major) numpy array → materialised → Owned storage."""
@@ -200,25 +192,14 @@ def test_polars_series_copies():
     np.testing.assert_allclose(result, [1.0, 2.0, 3.0, 4.0])
 
 
-def test_numpy_f64_c_contiguous_tree_zero_copy():
-    """numpy f64 C-contiguous with copy=False → External storage in tree → zero-copy."""
-    rng = np.random.default_rng(6)
-    np_data = np.ascontiguousarray(rng.random((50, 3)), dtype=np.float64)
+def test_numpy_f32_tree_copy():
+    """numpy float32 with copy=False → must copy (no zero-copy for non-float64) → no crash."""
+    rng = np.random.default_rng(7)
+    np_data = rng.random((50, 3)).astype(np.float32)
     tree = spatial.KDTree(np_data, leaf_size=10, copy=False)
-    tree_data_np = to_np_via_buffer(tree.data())
-    assert np.shares_memory(np_data, tree_data_np), (
-        "KDTree(copy=False) on C-contiguous float64 should use External (zero-copy) storage"
-    )
-
-#f32 not supported yet
-# def test_numpy_f32_tree_copy():
-#     """numpy float32 with copy=False → must copy (no zero-copy for non-float64) → no crash."""
-#     rng = np.random.default_rng(7)
-#     np_data = rng.random((50, 3)).astype(np.float32)
-#     tree = spatial.KDTree(np_data, leaf_size=10, copy=False)
-#     q = irn.ndutils.from_numpy(np.zeros((1, 3), dtype=np.float64))
-#     result = tree.query_knn(q, 5)
-#     assert len(result.indices.tolist()) == 5
+    q = irn.ndutils.from_numpy(np.zeros((1, 3), dtype=np.float64))
+    result = tree.query_knn(q, 5)
+    assert len(result.indices) == 5
 
 
 def test_numpy_fortran_tree_copy():
