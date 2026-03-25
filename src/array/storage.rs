@@ -204,16 +204,11 @@ impl<T: Clone> Clone for Storage<T> {
     }
 }
 
-impl<T: Serialize> Serialize for Storage<T> {
+impl<T: Serialize + Clone> Serialize for Storage<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             Storage::Owned(v) => v.serialize(serializer),
-            Storage::External { .. } | Storage::Strided { .. } | Storage::Buffer { .. } => Err(
-                serde::ser::Error::custom(
-                    "cannot serialise External, Strided, or Buffer storage; \
-                     call to_contiguous() or clone the NdArray first",
-                ),
-            ),
+            _ => self.to_owned_vec().serialize(serializer),
         }
     }
 }

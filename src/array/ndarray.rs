@@ -8,6 +8,7 @@ use crate::array::strided_iter::StridedIter;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound(serialize = "T: Serialize + Clone", deserialize = "T: Deserialize<'de>"))]
 pub struct NdArray<T> {
     shape: Shape,
     strides: Vec<usize>,

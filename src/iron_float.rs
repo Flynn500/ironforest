@@ -25,27 +25,37 @@ pub trait IronFloat:
     + DeserializeOwned
     + ToPrimitive
 {
-    /// Squared Euclidean distance between two same-length slices.
-    /// Implementations may use SIMD acceleration.
     fn squared_euclidean_slice(a: &[Self], b: &[Self]) -> Self;
+
+    fn dot_product_slice(a: &[Self], b: &[Self]) -> Self;
 }
 
 impl IronFloat for f64 {
     #[inline]
     fn squared_euclidean_slice(a: &[Self], b: &[Self]) -> Self {
-        squared_euclidean(a, b)
+        squared_euclidean_f64(a, b)
+    }
+
+    #[inline]
+    fn dot_product_slice(a: &[Self], b: &[Self]) -> Self {
+        dot_product_f64(a, b)
     }
 }
 
 impl IronFloat for f32 {
     #[inline]
     fn squared_euclidean_slice(a: &[Self], b: &[Self]) -> Self {
-        a.iter().zip(b).map(|(x, y)| { let d = x - y; d * d }).sum()
+        squared_euclidean_f32(a, b)
+    }
+
+    #[inline]
+    fn dot_product_slice(a: &[Self], b: &[Self]) -> Self {
+        dot_product_f32(a, b)
     }
 }
 
 // =============================================================================
-// f64 SIMD paths
+// Distance SIMD paths
 // =============================================================================
 
 #[cfg(target_arch = "x86_64")]
@@ -143,9 +153,131 @@ unsafe fn simd_squared_euclidean_avx2_fma(a: &[f64], b: &[f64]) -> f64 {
     }
 }
 
+
+// f32 distance
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+unsafe fn squared_euclidean_single_acc_f32(a: &[f32], b: &[f32]) -> f32 {
+    let n = a.len();
+    let chunks = n / 8;
+    let remainder = n % 8;
+
+    let mut acc = _mm256_setzero_ps();
+    let a_ptr = a.as_ptr();
+    let b_ptr = b.as_ptr();
+    unsafe {
+        for i in 0..chunks {
+            let offset = i * 8;
+            let va = _mm256_loadu_ps(a_ptr.add(offset));
+            let vb = _mm256_loadu_ps(b_ptr.add(offset));
+            let diff = _mm256_sub_ps(va, vb);
+            acc = _mm256_fmadd_ps(diff, diff, acc);
+        }
+
+        let hi = _mm256_extractf128_ps(acc, 1);
+        let lo = _mm256_castps256_ps128(acc);
+        let sum128 = _mm_add_ps(hi, lo);
+        let shuf = _mm_movehdup_ps(sum128);
+        let sums = _mm_add_ps(sum128, shuf);
+        let shuf2 = _mm_movehl_ps(sums, sums);
+        let mut result = _mm_cvtss_f32(_mm_add_ss(sums, shuf2));
+
+        let tail_start = chunks * 8;
+        for i in 0..remainder {
+            let d = a[tail_start + i] - b[tail_start + i];
+            result += d * d;
+        }
+
+        result
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+unsafe fn squared_euclidean_multi_acc_f32(a: &[f32], b: &[f32]) -> f32 {
+    let n = a.len();
+    let chunks = n / 32;
+    let a_ptr = a.as_ptr();
+    let b_ptr = b.as_ptr();
+    unsafe {
+        let mut acc0 = _mm256_setzero_ps();
+        let mut acc1 = _mm256_setzero_ps();
+        let mut acc2 = _mm256_setzero_ps();
+        let mut acc3 = _mm256_setzero_ps();
+
+        for i in 0..chunks {
+            let offset = i * 32;
+
+            let d0 = _mm256_sub_ps(_mm256_loadu_ps(a_ptr.add(offset)),      _mm256_loadu_ps(b_ptr.add(offset)));
+            let d1 = _mm256_sub_ps(_mm256_loadu_ps(a_ptr.add(offset + 8)),  _mm256_loadu_ps(b_ptr.add(offset + 8)));
+            let d2 = _mm256_sub_ps(_mm256_loadu_ps(a_ptr.add(offset + 16)), _mm256_loadu_ps(b_ptr.add(offset + 16)));
+            let d3 = _mm256_sub_ps(_mm256_loadu_ps(a_ptr.add(offset + 24)), _mm256_loadu_ps(b_ptr.add(offset + 24)));
+
+            acc0 = _mm256_fmadd_ps(d0, d0, acc0);
+            acc1 = _mm256_fmadd_ps(d1, d1, acc1);
+            acc2 = _mm256_fmadd_ps(d2, d2, acc2);
+            acc3 = _mm256_fmadd_ps(d3, d3, acc3);
+        }
+
+        acc0 = _mm256_add_ps(acc0, acc1);
+        acc2 = _mm256_add_ps(acc2, acc3);
+        acc0 = _mm256_add_ps(acc0, acc2);
+
+        let hi = _mm256_extractf128_ps(acc0, 1);
+        let lo = _mm256_castps256_ps128(acc0);
+        let sum128 = _mm_add_ps(hi, lo);
+        let shuf = _mm_movehdup_ps(sum128);
+        let sums = _mm_add_ps(sum128, shuf);
+        let shuf2 = _mm_movehl_ps(sums, sums);
+        let mut result = _mm_cvtss_f32(_mm_add_ss(sums, shuf2));
+
+        let tail_start = chunks * 32;
+        for i in tail_start..n {
+            let d = a[i] - b[i];
+            result += d * d;
+        }
+
+        result
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+unsafe fn simd_squared_euclidean_avx2_fma_f32(a: &[f32], b: &[f32]) -> f32 {
+    let n = a.len();
+    unsafe {
+        if n >= 64 {
+            squared_euclidean_multi_acc_f32(a, b)
+        } else {
+            squared_euclidean_single_acc_f32(a, b)
+        }
+    }
+}
+
+/// f32-specific SIMD-accelerated squared Euclidean distance.
+#[inline]
+pub fn squared_euclidean_f32(a: &[f32], b: &[f32]) -> f32 {
+    debug_assert_eq!(a.len(), b.len());
+
+    #[cfg(target_arch = "x86_64")]
+    {
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            return unsafe { simd_squared_euclidean_avx2_fma_f32(a, b) };
+        }
+    }
+
+    a.iter()
+        .zip(b)
+        .map(|(a, b)| {
+            let d = a - b;
+            d * d
+        })
+        .sum()
+}
+
 /// f64-specific SIMD-accelerated squared Euclidean distance.
 #[inline]
-pub fn squared_euclidean(a: &[f64], b: &[f64]) -> f64 {
+pub fn squared_euclidean_f64(a: &[f64], b: &[f64]) -> f64 {
     debug_assert_eq!(a.len(), b.len());
 
     #[cfg(target_arch = "x86_64")]
@@ -162,4 +294,109 @@ pub fn squared_euclidean(a: &[f64], b: &[f64]) -> f64 {
             d * d
         })
         .sum()
+}
+
+// =============================================================================
+// Dot product SIMD paths
+// =============================================================================
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+unsafe fn simd_dot_avx2_fma_f64(a: &[f64], b: &[f64]) -> f64 {
+    let n = a.len();
+    let chunks = n / 4;
+    let remainder = n % 4;
+
+    let mut acc = _mm256_setzero_pd();
+
+    let a_ptr = a.as_ptr();
+    let b_ptr = b.as_ptr();
+
+    for i in 0..chunks {
+        let offset = i * 4;
+        unsafe {
+            let va = _mm256_loadu_pd(a_ptr.add(offset));
+            let vb = _mm256_loadu_pd(b_ptr.add(offset));
+            acc = _mm256_fmadd_pd(va, vb, acc);
+        }
+    }
+
+    let hi = _mm256_extractf128_pd(acc, 1);
+    let lo = _mm256_castpd256_pd128(acc);
+    let sum128 = _mm_add_pd(hi, lo);
+    let upper = _mm_unpackhi_pd(sum128, sum128);
+    let mut result = _mm_cvtsd_f64(_mm_add_sd(sum128, upper));
+
+    let tail_start = chunks * 4;
+    for i in 0..remainder {
+        result += a[tail_start + i] * b[tail_start + i];
+    }
+
+    result
+}
+
+/// f64 SIMD-accelerated dot product.
+#[inline]
+pub fn dot_product_f64(a: &[f64], b: &[f64]) -> f64 {
+    debug_assert_eq!(a.len(), b.len());
+
+    #[cfg(target_arch = "x86_64")]
+    {
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            return unsafe { simd_dot_avx2_fma_f64(a, b) };
+        }
+    }
+
+    a.iter().zip(b).map(|(x, y)| x * y).sum()
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+unsafe fn simd_dot_avx2_fma_f32(a: &[f32], b: &[f32]) -> f32 {
+    let n = a.len();
+    let chunks = n / 8;
+    let remainder = n % 8;
+
+    let mut acc = _mm256_setzero_ps();
+
+    let a_ptr = a.as_ptr();
+    let b_ptr = b.as_ptr();
+
+    for i in 0..chunks {
+        let offset = i * 8;
+        unsafe {
+            let va = _mm256_loadu_ps(a_ptr.add(offset));
+            let vb = _mm256_loadu_ps(b_ptr.add(offset));
+            acc = _mm256_fmadd_ps(va, vb, acc);
+        }
+    }
+
+    let hi = _mm256_extractf128_ps(acc, 1);
+    let lo = _mm256_castps256_ps128(acc);
+    let sum128 = _mm_add_ps(hi, lo);
+    let shuf = _mm_movehdup_ps(sum128);
+    let sums = _mm_add_ps(sum128, shuf);
+    let shuf2 = _mm_movehl_ps(sums, sums);
+    let mut result = _mm_cvtss_f32(_mm_add_ss(sums, shuf2));
+
+    let tail_start = chunks * 8;
+    for i in 0..remainder {
+        result += a[tail_start + i] * b[tail_start + i];
+    }
+
+    result
+}
+
+#[inline]
+pub fn dot_product_f32(a: &[f32], b: &[f32]) -> f32 {
+    debug_assert_eq!(a.len(), b.len());
+
+    #[cfg(target_arch = "x86_64")]
+    {
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            return unsafe { simd_dot_avx2_fma_f32(a, b) };
+        }
+    }
+
+    a.iter().zip(b).map(|(x, y)| x * y).sum()
 }
