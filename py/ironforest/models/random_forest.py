@@ -74,6 +74,9 @@ class RandomForestClassifier:
         if not isinstance(y, Array):
             y = ndutils.asarray(y)
 
+        if X.dtype == "float32":
+            X = X.astype("float64")
+
         if X.ndim != 2:
             raise ValueError(f"X must be 2D array, got {X.ndim}D")
         if y.ndim != 1:
@@ -209,6 +212,9 @@ class RandomForestRegressor:
             X = ndutils.asarray(X)
         if not isinstance(y, Array):
             y = ndutils.asarray(y)
+
+        if X.dtype == "float32":
+            X = X.astype("float64")
 
         if X.ndim != 2:
             raise ValueError(f"X must be 2D array, got {X.ndim}D")

@@ -169,7 +169,7 @@ def run_benchmarks_blobs():
 
         rows = benchmark_dim(dim, data, queries, ref_indices)
         print_results(dim, rows)
-        plot_pareto(dim, rows)
+
     print("\n=== Done (Blobs) ===")
     
 

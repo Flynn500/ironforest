@@ -23,7 +23,13 @@ fn validate_vec2d<T>(v: &[Vec<T>]) -> PyResult<(usize, usize)> {
 #[derive(Clone)]
 pub enum ArrayData {
     Float(NdArray<f64>),
+    Float32(NdArray<f32>),
     Int(NdArray<i64>),
+}
+
+pub enum FloatNdArray {
+    F32(NdArray<f32>),
+    F64(NdArray<f64>),
 }
 
 pub enum ArrayLike<'py> {
@@ -91,6 +97,10 @@ impl<'py> ArrayLike<'py> {
                 let inner = bound.borrow();
                 match &inner.inner {
                     ArrayData::Float(f) => Ok(f.clone()),
+                    ArrayData::Float32(f) => {
+                        let data: Vec<f64> = f.as_slice_unchecked().iter().map(|&x| x as f64).collect();
+                        Ok(NdArray::from_vec(f.shape().clone(), data))
+                    }
                     ArrayData::Int(_) => Err(PyTypeError::new_err(
                         "expected float array; got integer array"
                     )),
@@ -146,6 +156,10 @@ impl<'py> ArrayLike<'py> {
                         let data: Vec<i64> = f.as_slice_unchecked().iter().map(|&x| x as i64).collect();
                         Ok(NdArray::from_vec(f.shape().clone(), data))
                     }
+                    ArrayData::Float32(f) => {
+                        let data: Vec<i64> = f.as_slice_unchecked().iter().map(|&x| x as i64).collect();
+                        Ok(NdArray::from_vec(f.shape().clone(), data))
+                    }
                 }
             }
             //add zero copy path
@@ -194,6 +208,7 @@ impl<'py> ArrayLike<'py> {
                 let inner = bound.borrow();
                 match &inner.inner {
                     ArrayData::Float(f) => f.shape().dims().len(),
+                    ArrayData::Float32(f) => f.shape().dims().len(),
                     ArrayData::Int(i) => i.shape().dims().len(),
                 }
             }
@@ -212,6 +227,7 @@ impl<'py> ArrayLike<'py> {
     pub fn is_f32(&self) -> bool {
         match self {
             ArrayLike::NumPy(bound) => bound.cast::<PyArrayDyn<f32>>().is_ok(),
+            ArrayLike::Array(bound) => matches!(bound.borrow().inner, ArrayData::Float32(_)),
             _ => false,
         }
     }
@@ -287,6 +303,7 @@ impl<'py> ArrayLike<'py> {
             ArrayLike::Array(bound) => {
                 let inner = bound.borrow();
                 match &inner.inner {
+                    ArrayData::Float32(f) => Ok(f.clone()),
                     ArrayData::Float(f) => {
                         let data: Vec<f32> = f.as_slice_unchecked().iter().map(|&x| x as f32).collect();
                         Ok(NdArray::from_vec(f.shape().clone(), data))
@@ -333,6 +350,47 @@ impl<'py> ArrayLike<'py> {
         }
     }
 
+    pub fn into_float_ndarray(self) -> PyResult<FloatNdArray> {
+        use numpy::PyArrayDyn;
+        match self {
+            ArrayLike::Array(bound) => {
+                let inner = bound.borrow();
+                match &inner.inner {
+                    ArrayData::Float32(f) => Ok(FloatNdArray::F32(f.clone())),
+                    ArrayData::Float(f) => Ok(FloatNdArray::F64(f.clone())),
+                    ArrayData::Int(_) => Err(PyTypeError::new_err(
+                        "expected float array; got integer array"
+                    )),
+                }
+            }
+            ArrayLike::NumPy(bound) => {
+                if let Ok(arr) = bound.cast::<PyArrayDyn<f32>>() {
+                    let readonly = arr.readonly();
+                    let shape = readonly.shape().to_vec();
+                    let data = readonly.as_slice()?.to_vec();
+                    Ok(FloatNdArray::F32(NdArray::from_vec(Shape::new(shape), data)))
+                } else if let Ok(arr) = bound.cast::<PyArrayDyn<f64>>() {
+                    let readonly = arr.readonly();
+                    let shape = readonly.shape().to_vec();
+                    if readonly.is_c_contiguous() {
+                        let slice = readonly.as_slice()?;
+                        let owner = bound.clone().into_any().unbind();
+                        Ok(FloatNdArray::F64(unsafe { NdArray::from_external(owner, slice.as_ptr(), Shape::new(shape)) }))
+                    } else {
+                        let data: Vec<f64> = readonly.as_array().iter().copied().collect();
+                        Ok(FloatNdArray::F64(NdArray::from_vec(Shape::new(shape), data)))
+                    }
+                } else {
+                    Err(PyTypeError::new_err("expected float32 or float64 numpy array"))
+                }
+            }
+            other => {
+                let arr = other.into_ndarray()?;
+                Ok(FloatNdArray::F64(arr))
+            }
+        }
+    }
+
     pub fn into_f32_spatial_query_ndarray(self, expected_dim: usize) -> PyResult<NdArray<f32>> {
         let arr = self.into_f32_ndarray()?;
         let shape = arr.shape().dims();
@@ -375,8 +433,17 @@ impl PyArray {
     pub fn as_float(&self) -> PyResult<&NdArray<f64>> {
         match &self.inner {
             ArrayData::Float(a) => Ok(a),
-            ArrayData::Int(_) => Err(PyTypeError::new_err(
-                "operation not supported for integer arrays"
+            ArrayData::Float32(_) | ArrayData::Int(_) => Err(PyTypeError::new_err(
+                "operation not supported for non-float64 arrays"
+            )),
+        }
+    }
+
+    pub fn as_float32(&self) -> PyResult<&NdArray<f32>> {
+        match &self.inner {
+            ArrayData::Float32(a) => Ok(a),
+            ArrayData::Float(_) | ArrayData::Int(_) => Err(PyTypeError::new_err(
+                "operation not supported for non-float32 arrays"
             )),
         }
     }
@@ -384,7 +451,7 @@ impl PyArray {
     pub fn as_int(&self) -> PyResult<&NdArray<i64>> {
         match &self.inner {
             ArrayData::Int(a) => Ok(a),
-            ArrayData::Float(_) => Err(PyTypeError::new_err(
+            ArrayData::Float(_) | ArrayData::Float32(_) => Err(PyTypeError::new_err(
                 "operation not supported for integer arrays"
             )),
         }
@@ -414,13 +481,18 @@ impl PyArray {
         Ok(self.as_float()?.as_view())
     }
 
+    pub fn as_view_float32(&self) -> PyResult<NdArray<f32>> {
+        check_alive!(self);
+        Ok(self.as_float32()?.as_view())
+    }
+
     /// Moves the inner `NdArray<f64>` out of this `PyArray`, marks it dead, and
     /// returns ownership to the caller.
     pub fn take_float(&mut self) -> PyResult<NdArray<f64>> {
         check_alive!(self);
-        if matches!(self.inner, ArrayData::Int(_)) {
+        if !matches!(self.inner, ArrayData::Float(_)) {
             return Err(pyo3::exceptions::PyTypeError::new_err(
-                "operation not supported for integer arrays",
+                "operation not supported for non-float64 arrays",
             ));
         }
         let dummy = ArrayData::Float(NdArray::from_vec(Shape::new(vec![0, 0]), vec![]));
@@ -428,7 +500,23 @@ impl PyArray {
         self.alive = false;
         match taken {
             ArrayData::Float(nd) => Ok(nd),
-            ArrayData::Int(_) => unreachable!(),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn take_float32(&mut self) -> PyResult<NdArray<f32>> {
+        check_alive!(self);
+        if !matches!(self.inner, ArrayData::Float32(_)) {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "operation not supported for non-float32 arrays",
+            ));
+        }
+        let dummy = ArrayData::Float32(NdArray::from_vec(Shape::new(vec![0, 0]), vec![]));
+        let taken = std::mem::replace(&mut self.inner, dummy);
+        self.alive = false;
+        match taken {
+            ArrayData::Float32(nd) => Ok(nd),
+            _ => unreachable!(),
         }
     }
 }

@@ -1,6 +1,12 @@
 # IronForest
 Fast spatial indexing and approximate density estimation for Python, powered by Rust. Zero external dependencies.
 
+## DEPRECTATION NOTE
+
+Note that decision tree-style models will be deprecated for our 1.0 release. This is because I am signficantly more interested and better at our making spatial trees. The motivation behind them was keeping all my personal projects as dependency free as possible, and I have been using them in an audio classification pipeline. scikit-learn offers more robust decision trees with more features.
+
+I am much more confident in delivering high quality spatial trees and I have plans to expand queries and implement dual tree algorithms down the track. This note is just for the sake of keeping good practices as a maintainer, I only have 1 star on github... and it's me.
+
 ## Quickstart
 
 Quickly find the k nearest neighbours in high-dimensional space using random projections and our KDTree.
@@ -44,7 +50,7 @@ You can also build with `maturin build --release` assuming maturin is and rust a
 The main things I need to finish before 1.0 are improving compatibility with the wider python ecosystem and improving the robustness of my algorithms. Main goals are:
 - Adding buffer protocols (DONE)
 - Integration with pandas and polars (DONE)
-- f16 & f32 intergration (DONE)
+- f32 intergration (DONE)
 - NaN handling
 - Spatial & RPForest objects
 
@@ -77,15 +83,12 @@ Speed comparison of our KDTree vs SciPy & Scikit-Learn on a randomly generated u
 
 KDTree is generally seen as the baseline spatial indexing tree. Our other trees scale better with dimensionality or provide better results depending on the nature of the dataset used, see `docs/spatial.md` & `docs/agg_tree.md` for more detailed information.
 
-## Tree-Based Models
-IronForest includes tree-based ML models that run entirely on the Rust core no external dependencies at runtime. Decision trees support standard axis splits as well as random projection and vantage point based splits.
+## Models
+IronForest also includes a variety of models. Many of these leverage our spatial trees or other parts of our exsiting infrastructure but they aren't our core focus.
 
 - Decision Trees
 - Random Forest
 - Isolation Forest
-
-### Additional Models
-We include a handful of additional models built on core features our library already supports.
 - Linear Regression
 - Local Regression
 - KNN Regression & Classification
@@ -121,6 +124,6 @@ These modules are not the primary focus of the library but we still expose them 
 
 This project very much started out as a learning project, which is primarily why we dip into many niches that are already covered within the python ecosystem. Going forward however the focus is on our spatial & models modules. IronForest will never be a fully fledged alternative to the likes of scikit-learn, nor will it ever be competitve with some of the state of the art aNN libraries for high speed aNN queries on large datasets. 
 
-What I intend to provide is an easy to use API with high performance while maintaing zero dependencies. Currently our spatial module is in a fairly good spot, but our models can and will be improved in this regard. Any bugs reports would be much appreciated and I'm open to feature requests that align with the above stated goals.
+What we will provide is an easy to use API alongside high performance while maintaing zero dependencies. Currently our spatial module is in a fairly good spot, but our models can and will be improved in this regard. Any bugs reports would be much appreciated and I'm open to feature requests that align with the above stated goals.
 
 

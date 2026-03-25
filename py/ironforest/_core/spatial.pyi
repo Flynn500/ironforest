@@ -603,7 +603,6 @@ class BruteForce:
         self,
         data: Array[float],
         metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
-        copy: bool = True
     ):
         """Construct a BruteForce search structure from a 2D array of points."""
         ...

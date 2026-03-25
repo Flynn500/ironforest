@@ -1,4 +1,4 @@
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 use crate::{Generator, array::NdArray, spatial::HeapItem};
 use rayon::prelude::*;
@@ -28,6 +28,7 @@ pub trait AnnQuery: SpatialTree {
         if k == 0 || self.n_points() == 0 {
             return Vec::new();
         }
+
         self.ann_candidates_inner(query, k, n_candidates.max(k))
     }
 
@@ -306,7 +307,7 @@ pub trait AnnQuery: SpatialTree {
         let bail_threshold = 0.075;
 
         let mut path: Vec<(usize, usize, usize, Self::Float)> = Vec::new();
-        let mut rng = Generator::from_seed(0u64 ^ 0xDEADBEEF);
+        let mut rng = Generator::from_seed(0);
         self.stochastic_probe(
             query, k, n_candidates, &mut rng, Self::Float::zero(),
             &mut candidates, &mut seen, bail_threshold * 2.0,
@@ -329,7 +330,7 @@ pub trait AnnQuery: SpatialTree {
                 let t = i as f64 / n_probes as f64;
                 let tau_i = num_traits::cast::<f64, Self::Float>(base_tau * t).unwrap();
                 let diverge_depth = max_depth * (n_probes - i) / n_probes;
-                let mut rng = Generator::from_seed(i as u64 ^ 0xDEADBEEF);
+                let mut rng = Generator::from_seed(1 + i as u64);
                 self.stochastic_probe(
                     query, k, n_candidates, &mut rng, tau_i,
                     &mut candidates, &mut seen, bail_threshold,

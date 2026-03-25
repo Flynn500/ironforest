@@ -775,12 +775,13 @@ impl PyBallTree {
     fn from_array(mut array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, preserve_array: bool) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let data = if preserve_array {
-            array.as_view_float()?
+        if matches!(array.inner, ArrayData::Float32(_)) {
+            let data = if preserve_array { array.as_view_float32()? } else { array.take_float32()?.to_contiguous() };
+            Ok(PyBallTree { inner: Some(SpatialInner::F32(BallTree32::new(data, leaf_size, metric))) })
         } else {
-            array.take_float()?.to_contiguous()
-        };
-        Ok(PyBallTree { inner: Some(SpatialInner::F64(BallTree::new(data, leaf_size, metric))) })
+            let data = if preserve_array { array.as_view_float()? } else { array.take_float()?.to_contiguous() };
+            Ok(PyBallTree { inner: Some(SpatialInner::F64(BallTree::new(data, leaf_size, metric))) })
+        }
     }
 
     #[new]
@@ -811,12 +812,13 @@ impl PyKDTree {
     fn from_array(mut array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, preserve_array: bool) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let data = if preserve_array {
-            array.as_view_float()?
+        if matches!(array.inner, ArrayData::Float32(_)) {
+            let data = if preserve_array { array.as_view_float32()? } else { array.take_float32()?.to_contiguous() };
+            Ok(PyKDTree { inner: Some(SpatialInner::F32(KDTree32::new(data, leaf_size, metric))) })
         } else {
-            array.take_float()?.to_contiguous()
-        };
-        Ok(PyKDTree { inner: Some(SpatialInner::F64(KDTree::new(data, leaf_size, metric))) })
+            let data = if preserve_array { array.as_view_float()? } else { array.take_float()?.to_contiguous() };
+            Ok(PyKDTree { inner: Some(SpatialInner::F64(KDTree::new(data, leaf_size, metric))) })
+        }
     }
 
     #[new]
@@ -847,13 +849,14 @@ impl PyVPTree {
     fn from_array(mut array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, selection: Option<&str>, preserve_array: bool) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let selection_method = parse_vantage_selection(selection.unwrap_or("random"))?;
-        let data = if preserve_array {
-            array.as_view_float()?
+        let selection_method = parse_vantage_selection(selection.unwrap_or("variance"))?;
+        if matches!(array.inner, ArrayData::Float32(_)) {
+            let data = if preserve_array { array.as_view_float32()? } else { array.take_float32()?.to_contiguous() };
+            Ok(PyVPTree { inner: Some(SpatialInner::F32(VPTree32::new(data, leaf_size, metric, selection_method))) })
         } else {
-            array.take_float()?.to_contiguous()
-        };
-        Ok(PyVPTree { inner: Some(SpatialInner::F64(VPTree::new(data, leaf_size, metric, selection_method))) })
+            let data = if preserve_array { array.as_view_float()? } else { array.take_float()?.to_contiguous() };
+            Ok(PyVPTree { inner: Some(SpatialInner::F64(VPTree::new(data, leaf_size, metric, selection_method))) })
+        }
     }
 
     #[new]
@@ -885,14 +888,17 @@ impl PyRPTree {
     fn from_array(mut array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, projection: Option<&str>, seed: u64, preserve_array: bool) -> PyResult<Self> {
         let leaf_size = leaf_size.unwrap_or(20);
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let ndim = array.as_float()?.ndim() as f64;
-        let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0 / ndim.sqrt())?;
-        let data = if preserve_array {
-            array.as_view_float()?
+        if matches!(array.inner, ArrayData::Float32(_)) {
+            let data = if preserve_array { array.as_view_float32()? } else { array.take_float32()?.to_contiguous() };
+            let ndim = data.shape().dims()[1] as f64;
+            let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0 / ndim.sqrt())?;
+            Ok(PyRPTree { inner: Some(SpatialInner::F32(RPTree32::new(data, leaf_size, metric, projection_method, seed))) })
         } else {
-            array.take_float()?.to_contiguous()
-        };
-        Ok(PyRPTree { inner: Some(SpatialInner::F64(RPTree::new(data, leaf_size, metric, projection_method, seed))) })
+            let ndim = array.as_float()?.ndim() as f64;
+            let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0 / ndim.sqrt())?;
+            let data = if preserve_array { array.as_view_float()? } else { array.take_float()?.to_contiguous() };
+            Ok(PyRPTree { inner: Some(SpatialInner::F64(RPTree::new(data, leaf_size, metric, projection_method, seed))) })
+        }
     }
 
     #[new]
@@ -922,27 +928,28 @@ pub struct PyBruteForce {
 #[pymethods]
 impl PyBruteForce {
     #[staticmethod]
-    #[pyo3(signature = (array, metric="euclidean", preserve_array=true))]
-    fn from_array(mut array: PyRefMut<'_, PyArray>, metric: Option<&str>, preserve_array: bool) -> PyResult<Self> {
+    #[pyo3(signature = (array, metric="euclidean"))]
+    fn from_array(array: PyRefMut<'_, PyArray>, metric: Option<&str>) -> PyResult<Self> {
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
-        let data = if preserve_array {
-            array.as_view_float()?
+        if matches!(array.inner, ArrayData::Float32(_)) {
+            let data = array.as_view_float32()?;
+            Ok(PyBruteForce { inner: Some(SpatialInner::F32(BruteForce32::new(data, metric))) })
         } else {
-            array.take_float()?.to_contiguous()
-        };
-        Ok(PyBruteForce { inner: Some(SpatialInner::F64(BruteForce::new(data, metric))) })
+            let data = array.as_view_float()?;
+            Ok(PyBruteForce { inner: Some(SpatialInner::F64(BruteForce::new(data, metric))) })
+        }
     }
 
     #[new]
-    #[pyo3(signature = (array, metric="euclidean", copy=true))]
-    fn __init__(array: ArrayLike, metric: Option<&str>, copy: bool) -> PyResult<Self> {
+    #[pyo3(signature = (array, metric="euclidean"))]
+    fn __init__(array: ArrayLike, metric: Option<&str>) -> PyResult<Self> {
         let metric = parse_metric(metric.unwrap_or("euclidean"))?;
         let use_f32 = array.is_f32();
         if use_f32 {
-            let data = if copy { array.into_f32_ndarray()?.to_contiguous() } else { array.into_f32_ndarray()? };
+            let data = array.into_f32_ndarray()?;
             Ok(PyBruteForce { inner: Some(SpatialInner::F32(BruteForce32::new(data, metric))) })
         } else {
-            let data = if copy { array.into_ndarray()?.to_contiguous() } else { array.into_ndarray()? };
+            let data = array.into_ndarray()?;
             Ok(PyBruteForce { inner: Some(SpatialInner::F64(BruteForce::new(data, metric))) })
         }
     }
@@ -971,12 +978,13 @@ impl PyAggTree {
         let kernel = parse_kernel(kernel.unwrap_or("gaussian"))?;
         let bandwidth = bandwidth.unwrap_or(1.0);
         let atol = atol.unwrap_or(0.01);
-        let data = if preserve_array {
-            array.as_view_float()?
+        if matches!(array.inner, ArrayData::Float32(_)) {
+            let data = if preserve_array { array.as_view_float32()? } else { array.take_float32()?.to_contiguous() };
+            Ok(PyAggTree { inner: Some(SpatialInner::F32(AggTree32::new(data, leaf_size, metric, kernel, bandwidth, atol))) })
         } else {
-            array.take_float()?.to_contiguous()
-        };
-        Ok(PyAggTree { inner: Some(SpatialInner::F64(AggTree::new(data, leaf_size, metric, kernel, bandwidth, atol))) })
+            let data = if preserve_array { array.as_view_float()? } else { array.take_float()?.to_contiguous() };
+            Ok(PyAggTree { inner: Some(SpatialInner::F64(AggTree::new(data, leaf_size, metric, kernel, bandwidth, atol))) })
+        }
     }
 
     #[new]

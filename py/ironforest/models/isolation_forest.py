@@ -66,6 +66,9 @@ class IsolationForest:
         if not isinstance(X, Array):
             X = ndutils.asarray(X)
 
+        if X.dtype == "float32":
+            X = X.astype("float64")
+
         if X.ndim != 2:
             raise ValueError(f"X must be 2D array, got {X.ndim}D")
 

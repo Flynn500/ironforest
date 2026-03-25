@@ -76,7 +76,7 @@ fn outer(a: ArrayLike, b: ArrayLike) -> PyResult<PyArray> {
     let a_arr = a.into_ndarray()?;
     let b_arr = b.into_ndarray()?;
     Ok(PyArray {
-        inner: ArrayData::Float(NdArray::outer(&a_arr, &b_arr)),
+        inner: ArrayData::Float(NdArray::<f64>::outer(&a_arr, &b_arr)),
         alive: true
     })
 }
@@ -126,21 +126,40 @@ fn from_numpy(_py: Python<'_>, arr: &Bound<'_, PyAny>) -> PyResult<PyArray> {
 
     match dtype_str.as_str() {
         "f" => {
-            let numpy_arr = arr.cast::<PyArrayDyn<f64>>()
-                .map_err(|_| PyTypeError::new_err("expected float64 numpy array"))?;
-            let readonly = numpy_arr.readonly();
-            let shape = readonly.shape().to_vec();
-
-            let inner = if readonly.is_c_contiguous() {
-                let slice = readonly.as_slice()?;
-                let owner = arr.clone().unbind();
-                unsafe { NdArray::from_external(owner, slice.as_ptr(), Shape::new(shape)) }
+            let itemsize: usize = dtype.getattr("itemsize")?.extract()?;
+            if itemsize == 4 {
+                // float32
+                let numpy_arr = arr.cast::<PyArrayDyn<f32>>()
+                    .map_err(|_| PyTypeError::new_err("expected float32 numpy array"))?;
+                let readonly = numpy_arr.readonly();
+                let shape = readonly.shape().to_vec();
+                let inner = if readonly.is_c_contiguous() {
+                    let slice = readonly.as_slice()?;
+                    let owner = arr.clone().unbind();
+                    unsafe { NdArray::from_external(owner, slice.as_ptr(), Shape::new(shape)) }
+                } else {
+                    let data: Vec<f32> = readonly.as_array().iter().copied().collect();
+                    NdArray::from_vec(Shape::new(shape), data)
+                };
+                Ok(PyArray { inner: ArrayData::Float32(inner), alive: true })
             } else {
-                let data: Vec<f64> = readonly.as_array().iter().copied().collect();
-                NdArray::from_vec(Shape::new(shape), data)
-            };
+                // float64
+                let numpy_arr = arr.cast::<PyArrayDyn<f64>>()
+                    .map_err(|_| PyTypeError::new_err("expected float64 numpy array"))?;
+                let readonly = numpy_arr.readonly();
+                let shape = readonly.shape().to_vec();
 
-            Ok(PyArray { inner: ArrayData::Float(inner), alive: true })
+                let inner = if readonly.is_c_contiguous() {
+                    let slice = readonly.as_slice()?;
+                    let owner = arr.clone().unbind();
+                    unsafe { NdArray::from_external(owner, slice.as_ptr(), Shape::new(shape)) }
+                } else {
+                    let data: Vec<f64> = readonly.as_array().iter().copied().collect();
+                    NdArray::from_vec(Shape::new(shape), data)
+                };
+
+                Ok(PyArray { inner: ArrayData::Float(inner), alive: true })
+            }
         }
         "i" | "u" => {
             let numpy_arr = arr.cast::<PyArrayDyn<i64>>()

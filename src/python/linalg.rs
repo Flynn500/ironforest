@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
 use crate::array::NdArray;
-use super::{PyArray, ArrayData, ArrayLike};
+use super::{PyArray, ArrayData, ArrayLike, FloatNdArray};
 
 pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(matmul, m)?)?;
@@ -21,17 +21,36 @@ pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[pyfunction]
 fn matmul(a: ArrayLike, b: ArrayLike) -> PyResult<PyArray> {
-    Ok(PyArray { inner: ArrayData::Float(a.into_ndarray()?.matmul(&b.into_ndarray()?)), alive: true })
+    match (a.into_float_ndarray()?, b.into_float_ndarray()?) {
+        (FloatNdArray::F32(a), FloatNdArray::F32(b)) =>
+            Ok(PyArray { inner: ArrayData::Float32(a.matmul(&b)), alive: true }),
+        (a, b) => {
+            let a64 = match a { FloatNdArray::F64(x) => x, FloatNdArray::F32(x) => NdArray::from_vec(x.shape().clone(), x.as_slice_unchecked().iter().map(|&v| v as f64).collect()) };
+            let b64 = match b { FloatNdArray::F64(x) => x, FloatNdArray::F32(x) => NdArray::from_vec(x.shape().clone(), x.as_slice_unchecked().iter().map(|&v| v as f64).collect()) };
+            Ok(PyArray { inner: ArrayData::Float(a64.matmul(&b64)), alive: true })
+        }
+    }
 }
 
 #[pyfunction]
 fn dot(a: ArrayLike, b: ArrayLike) -> PyResult<PyArray> {
-    Ok(PyArray { inner: ArrayData::Float(a.into_ndarray()?.dot(&b.into_ndarray()?)), alive: true })
+    match (a.into_float_ndarray()?, b.into_float_ndarray()?) {
+        (FloatNdArray::F32(a), FloatNdArray::F32(b)) =>
+            Ok(PyArray { inner: ArrayData::Float32(a.dot(&b)), alive: true }),
+        (a, b) => {
+            let a64 = match a { FloatNdArray::F64(x) => x, FloatNdArray::F32(x) => NdArray::from_vec(x.shape().clone(), x.as_slice_unchecked().iter().map(|&v| v as f64).collect()) };
+            let b64 = match b { FloatNdArray::F64(x) => x, FloatNdArray::F32(x) => NdArray::from_vec(x.shape().clone(), x.as_slice_unchecked().iter().map(|&v| v as f64).collect()) };
+            Ok(PyArray { inner: ArrayData::Float(a64.dot(&b64)), alive: true })
+        }
+    }
 }
 
 #[pyfunction]
 fn transpose(a: ArrayLike) -> PyResult<PyArray> {
-    Ok(PyArray { inner: ArrayData::Float(a.into_ndarray()?.transpose()), alive: true })
+    match a.into_float_ndarray()? {
+        FloatNdArray::F32(a) => Ok(PyArray { inner: ArrayData::Float32(a.transpose()), alive: true }),
+        FloatNdArray::F64(a) => Ok(PyArray { inner: ArrayData::Float(a.transpose()), alive: true }),
+    }
 }
 
 #[pyfunction]
@@ -73,24 +92,33 @@ fn eigvals(a: ArrayLike) -> PyResult<PyArray> {
 #[pyfunction]
 #[pyo3(signature = (a, k=None))]
 fn diagonal(a: ArrayLike, k: Option<isize>) -> PyResult<PyArray> {
-    let arr = a.into_ndarray()?;
-    if arr.ndim() != 2 {
-        return Err(PyValueError::new_err("diagonal requires a 2D array"));
+    match a.into_float_ndarray()? {
+        FloatNdArray::F32(arr) => {
+            if arr.ndim() != 2 {
+                return Err(PyValueError::new_err("diagonal requires a 2D array"));
+            }
+            Ok(PyArray { inner: ArrayData::Float32(arr.diagonal(k.unwrap_or(0))), alive: true })
+        }
+        FloatNdArray::F64(arr) => {
+            if arr.ndim() != 2 {
+                return Err(PyValueError::new_err("diagonal requires a 2D array"));
+            }
+            Ok(PyArray { inner: ArrayData::Float(arr.diagonal(k.unwrap_or(0))), alive: true })
+        }
     }
-    Ok(PyArray {
-        inner: ArrayData::Float(arr.diagonal(k.unwrap_or(0))),
-        alive: true
-    })
 }
 
 #[pyfunction]
 fn outer(a: ArrayLike, b: ArrayLike) -> PyResult<PyArray> {
-    let a_arr = a.into_ndarray()?;
-    let b_arr = b.into_ndarray()?;
-    Ok(PyArray {
-        inner: ArrayData::Float(NdArray::outer(&a_arr, &b_arr)),
-        alive: true
-    })
+    match (a.into_float_ndarray()?, b.into_float_ndarray()?) {
+        (FloatNdArray::F32(a), FloatNdArray::F32(b)) =>
+            Ok(PyArray { inner: ArrayData::Float32(NdArray::<f32>::outer(&a, &b)), alive: true }),
+        (a, b) => {
+            let a64 = match a { FloatNdArray::F64(x) => x, FloatNdArray::F32(x) => NdArray::from_vec(x.shape().clone(), x.as_slice_unchecked().iter().map(|&v| v as f64).collect()) };
+            let b64 = match b { FloatNdArray::F64(x) => x, FloatNdArray::F32(x) => NdArray::from_vec(x.shape().clone(), x.as_slice_unchecked().iter().map(|&v| v as f64).collect()) };
+            Ok(PyArray { inner: ArrayData::Float(NdArray::<f64>::outer(&a64, &b64)), alive: true })
+        }
+    }
 }
 
 #[pyfunction]
