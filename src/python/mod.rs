@@ -541,25 +541,32 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<spatial::PyBallTree>()?;
     m.add_class::<spatial::PyKDTree>()?;
 
-    let ndutils_module = PyModule::new(m.py(), "ndutils")?;
+    let sys_modules = m.py().import("sys")?.getattr("modules")?;
+
+    let ndutils_module = PyModule::new(m.py(), "ironforest._core.ndutils")?;
     ndutils::register_module(&ndutils_module)?;
     m.add_submodule(&ndutils_module)?;
+    sys_modules.set_item("ironforest._core.ndutils", &ndutils_module)?;
 
-    let linalg_module = PyModule::new(m.py(), "linalg")?;
+    let linalg_module = PyModule::new(m.py(), "ironforest._core.linalg")?;
     linalg::register_module(&linalg_module)?;
     m.add_submodule(&linalg_module)?;
+    sys_modules.set_item("ironforest._core.linalg", &linalg_module)?;
 
-    let stats_module = PyModule::new(m.py(), "stats")?;
+    let stats_module = PyModule::new(m.py(), "ironforest._core.stats")?;
     stats::register_module(&stats_module)?;
     m.add_submodule(&stats_module)?;
+    sys_modules.set_item("ironforest._core.stats", &stats_module)?;
 
-    let random_module = PyModule::new(m.py(), "random")?;
+    let random_module = PyModule::new(m.py(), "ironforest._core.random")?;
     random::register_module(&random_module)?;
     m.add_submodule(&random_module)?;
+    sys_modules.set_item("ironforest._core.random", &random_module)?;
 
-    let spatial_module = PyModule::new(m.py(), "spatial")?;
+    let spatial_module = PyModule::new(m.py(), "ironforest._core.spatial")?;
     spatial::register_module(&spatial_module)?;
     m.add_submodule(&spatial_module)?;
+    sys_modules.set_item("ironforest._core.spatial", &spatial_module)?;
 
     tree_engine::register_classes(m)?;
 

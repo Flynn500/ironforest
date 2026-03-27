@@ -2,7 +2,7 @@
 
 from typing import Optional, Literal
 from ironforest._core import Array, ndutils, Tree, TreeConfig, TaskType, SplitCriterion, SplitGeometry
-
+import warnings
 
 class DecisionTreeClassifier:
     """A decision tree classifier.
@@ -21,6 +21,7 @@ class DecisionTreeClassifier:
         projection_density: float | None = None,
         random_state: int = 0,
     ):
+        warnings.warn("Decision Trees will be deprecated in 0.7")
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
@@ -155,6 +156,7 @@ class DecisionTreeRegressor:
         projection_density: float | None = None,
         random_state: int = 0,
     ):
+        warnings.warn("Decision Trees will be deprecated in 0.7")
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf

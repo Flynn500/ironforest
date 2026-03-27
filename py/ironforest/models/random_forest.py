@@ -1,6 +1,7 @@
 """Random Forest classifier and regressor built on tree_engine."""
 
 from typing import Optional, Literal
+import warnings
 from ironforest._core import (
     Array,
     ndutils,
@@ -45,6 +46,7 @@ class RandomForestClassifier:
             split_geometry: Split direction, "axis" for axis-aligned or "random_projection" for oblique splits.
             random_state: Controls randomness of bootstrapping and tree construction.
         """
+        warnings.warn("Random Forest will be deprecated in 0.7")
         self.n_estimators = n_estimators
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
@@ -185,6 +187,7 @@ class RandomForestRegressor:
             split_geometry: Split direction, "axis" for axis-aligned or "random_projection" for oblique splits.
             random_state: Controls randomness of bootstrapping and tree construction.
         """
+        warnings.warn("Random Forest will be deprecated in 0.7")
         self.n_estimators = n_estimators
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split

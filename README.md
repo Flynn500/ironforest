@@ -1,11 +1,8 @@
 # IronForest
 Fast spatial indexing and approximate density estimation for Python, powered by Rust. Zero external dependencies.
 
-## DEPRECTATION NOTE
-
-Note that decision tree-style models will be deprecated for our 1.0 release. This is because I am signficantly more interested and better at our making spatial trees. The motivation behind them was keeping all my personal projects as dependency free as possible, and I have been using them in an audio classification pipeline. scikit-learn offers more robust decision trees with more features.
-
-I am much more confident in delivering high quality spatial trees and I have plans to expand queries and implement dual tree algorithms down the track. This note is just for the sake of keeping good practices as a maintainer, I only have 1 star on github... and it's me.
+### Deprecation Note
+Decision Tree, Isolation Forest & Random Forest are deprecated for future releases. They do not sit in line with the core idea of this library and position us as a "scikit-learn alternative" which is not the space we'd like to be. The core focus will be on spatial data structures and models going forwards.
 
 ## Quickstart
 

@@ -1,6 +1,7 @@
 """Isolation Forest for anomaly detection built on tree_engine."""
 
 from typing import Optional
+import warnings
 from ironforest._core import (
     Array,
     ndutils,
@@ -41,6 +42,7 @@ class IsolationForest:
             max_features: Number of features per split. None uses all features.
             random_state: Controls randomness of sampling and tree construction.
         """
+        warnings.warn("Isolation Forest will be deprecated in 0.7")
         if contamination <= 0 or contamination > 0.5:
             raise ValueError(f"contamination must be in (0, 0.5], got {contamination}")
 
