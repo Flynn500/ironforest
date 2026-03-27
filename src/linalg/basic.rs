@@ -87,10 +87,11 @@ impl<T: IronFloat> NdArray<T> {
             (2, 1) => {
                 let (n, k) = (self.shape().dims()[0], self.shape().dims()[1]);
                 assert_eq!(k, other.len(), "Inner dimensions must match");
+                let other_slice = other.as_contiguous_slice();
                 let mut data = Vec::with_capacity(n);
                 for i in 0..n {
                     let row = self.row_cow(i);
-                    let sum = T::dot_product_slice(row.as_ref(), other.as_slice_unchecked());
+                    let sum = T::dot_product_slice(row.as_ref(), other_slice.as_ref());
                     data.push(sum);
                 }
                 NdArray::from_vec(Shape::d1(n), data)

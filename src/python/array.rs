@@ -1052,17 +1052,17 @@ impl PyArray {
         match &self.inner {
             ArrayData::Float(a) => {
                 let shape = a.shape().dims();
-                let data = a.as_slice_unchecked().to_vec();
+                let data = a.as_contiguous_slice().into_owned();
                 Ok(data.into_pyarray(py).reshape(shape).unwrap().into_any().unbind())
             }
             ArrayData::Float32(a) => {
                 let shape = a.shape().dims();
-                let data = a.as_slice_unchecked().to_vec();
+                let data = a.as_contiguous_slice().into_owned();
                 Ok(data.into_pyarray(py).reshape(shape).unwrap().into_any().unbind())
             }
             ArrayData::Int(a) => {
                 let shape = a.shape().dims();
-                let data = a.as_slice_unchecked().to_vec();
+                let data = a.as_contiguous_slice().into_owned();
                 Ok(data.into_pyarray(py).reshape(shape).unwrap().into_any().unbind())
             }
         }
