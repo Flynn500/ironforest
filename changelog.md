@@ -1,11 +1,14 @@
 ## 0.6
 
 ### Added
-
+- Zero copy interop with python buffer protocol for contigious arrays.
+- 
 ### Changed
-- Zero copy interop with numpy
+- aNN method has improved via the use of stochastic probes, controlled by n_probes. This improves both recall and query speed for most usecases.
 
 ### Fixed
+- Some models would panic in the rust core, returning a vauge and useless error message. Have added checks so errors are raised explicitly and up front.
+- Pickle serialization was broken across most spatial index trees.
 
 ## 0.5.2
 
