@@ -1,4 +1,17 @@
-"""Type stubs for ironforest._core.stats module."""
+"""Statistical summary functions for arrays.
+
+Provides aggregations and descriptive statistics such as mean, variance,
+standard deviation, median, mode, and quantiles.
+
+Example::
+
+    from ironforest._core import Array
+    from ironforest._core import stats
+
+    a = Array.asarray([1.0, 2.0, 3.0, 4.0, 5.0])
+    print(stats.mean(a))    # 3.0
+    print(stats.std(a))     # ~1.414
+"""
 
 from typing import overload
 from ironforest._core import Array, ArrayLike

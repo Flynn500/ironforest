@@ -1,4 +1,15 @@
-"""Type stubs for ironforest._core.ndutils module."""
+"""Array utility functions: creation, manipulation, and inspection helpers.
+
+Provides convenience wrappers around :class:`~ironforest._core.Array`
+for stacking, splitting, tiling, sorting, and type conversion.
+
+Example::
+
+    from ironforest._core import ndutils
+
+    a = ndutils.asarray([[0, 1, 2], [3, 4, 5]])
+    b = ndutils.linspace(0.0, 1.0, 5)
+"""
 
 from typing import Any, Sequence
 from ironforest._core import Array, ArrayLike, Dtype

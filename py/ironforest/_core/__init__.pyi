@@ -1,11 +1,25 @@
-"""Type stubs for ironforest._core module."""
+"""Core array type, tree engine primitives, and type aliases for IronForest.
+
+Provides the :class:`Array` n-dimensional array (float32, float64, int64),
+tree-engine building blocks (:class:`Tree`, :class:`TreeConfig`, etc.),
+and common type aliases used throughout the library.
+
+Example::
+
+    from ironforest._core import Array
+
+    a = Array.asarray([[1.0, 2.0], [3.0, 4.0]])
+    b = a.astype("float32")
+    print(b.dtype)   # 'float32'
+    print(b.mean())  # 2.5
+"""
 
 from typing import Optional, TypeVar, Generic, Sequence, Iterator, List, Literal, Tuple, overload, Any, Union
 
 T_co = TypeVar("T_co", covariant=True)
 
 ArrayLike = Union['Array', Sequence[float], Sequence[Sequence[float]], float, int, Any]
-Dtype = Literal["float", "float64", "f64", "int", "int64", "i64"]
+Dtype = Literal["float", "float64", "f64", "float32", "f32", "int", "int64", "i64"]
 
 
 class TaskType:
@@ -237,8 +251,25 @@ class Array(Sequence[T_co], Generic[T_co]):
         ...
 
     @property
-    def dtype(self) -> Literal["float64", "int64"]:
+    def dtype(self) -> Literal["float64", "float32", "int64"]:
         """The element type of this array."""
+        ...
+
+    @overload
+    def astype(self, dtype: Literal["float", "float64", "f64", "float32", "f32"]) -> Array[float]: ...
+    @overload
+    def astype(self, dtype: Literal["int", "int64", "i64"]) -> Array[int]: ...
+    def astype(self, dtype: Dtype) -> Array:
+        """Cast the array to a different dtype.
+
+        Args:
+            dtype: Target element type. Accepts "float64"/"f64"/"float",
+                "float32"/"f32" for floating-point, or "int64"/"i64"/"int"
+                for integer.
+
+        Returns:
+            A new array with elements converted to the requested type.
+        """
         ...
 
     @staticmethod

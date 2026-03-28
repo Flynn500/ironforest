@@ -120,6 +120,11 @@ class DecisionTreeClassifier:
         if X.ndim != 2:
             raise ValueError(f"X must be 2D array, got {X.ndim}D")
 
+        if X.shape[1] != self.n_features_:
+            raise ValueError(
+                f"X has {X.shape[1]} features, but model was trained with {self.n_features_} features"
+            )
+
         n_samples = X.shape[0]
         X_flat = X.ravel()
         return self.tree_.predict(X_flat, n_samples)
@@ -246,6 +251,11 @@ class DecisionTreeRegressor:
 
         if X.ndim != 2:
             raise ValueError(f"X must be 2D array, got {X.ndim}D")
+
+        if X.shape[1] != self.n_features_:
+            raise ValueError(
+                f"X has {X.shape[1]} features, but model was trained with {self.n_features_} features"
+            )
 
         n_samples = X.shape[0]
         X_flat = X.ravel()

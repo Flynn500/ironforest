@@ -1,4 +1,16 @@
-"""Type stubs for ironforest._core.linalg module."""
+"""Linear algebra routines operating on :class:`~ironforest._core.Array`.
+
+Includes matrix operations and decompositions such as matmul, dot,
+transpose, Cholesky, QR, least-squares, and eigendecomposition.
+
+Example::
+
+    from ironforest._core import Array
+    from ironforest._core import linalg
+
+    a = Array.asarray([[4.0, 2.0], [2.0, 3.0]])
+    vals, vecs = linalg.eig(a)
+"""
 
 from ironforest._core import Array, ArrayLike
 

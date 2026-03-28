@@ -1,4 +1,18 @@
-"""IronForest spatial: Contains a variety of spatial index trees & a dimension reducer"""
+"""Spatial index trees for nearest-neighbor, radius, and density queries.
+
+Contains :class:`BallTree`, :class:`KDTree`, :class:`RPTree`,
+:class:`VPTree`, :class:`AggTree`, and :class:`BruteForce`.
+All trees support exact kNN and radius search; BallTree, KDTree,
+and RPTree additionally support approximate nearest-neighbor (aNN) queries.
+
+Example::
+
+    from ironforest._core.spatial import KDTree
+
+    tree = KDTree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
+    result = tree.query_knn([0.1, 0.1], k=2)
+    print(result.indices)  # [0, 1] (or similar)
+"""
 
 from typing import Optional, Literal, List, Tuple, overload
 from ironforest._core import Array, ArrayLike
@@ -212,8 +226,12 @@ class BallTree:
         Args:
             query: Query point (scalar, list, or array-like).
             k: Number of nearest neighbors to return.
-            n_candidates: Number of candidates to check before returning the result.
-                Defaults to 2k if n_candidates is None
+            n_candidates: Number of candidates to check before returning the
+                result. Defaults to 2k if None.
+            n_probes: Number of subtrees to probe via stochastic search.
+                Additional probes improve recall and can improve speed when
+                the tree structure cannot cleanly separate dense regions of
+                data. Defaults to 1 if None.
 
         Returns:
             Spatial result object.
@@ -320,7 +338,21 @@ class KDTree:
         ...
 
     def query_ann(self, query: ArrayLike, k: int, n_candidates: int,  n_probes: int | None = None) -> SpatialResult:
-        """Find the approximate k nearest neighbors to the query point."""
+        """Find the approximate k nearest neighbors to the query point.
+
+        Args:
+            query: Query point (scalar, list, or array-like).
+            k: Number of nearest neighbors to return.
+            n_candidates: Number of candidates to check before returning the
+                result. Defaults to 2k if None.
+            n_probes: Number of subtrees to probe via stochastic search.
+                Additional probes improve recall and can improve speed when
+                the tree structure cannot cleanly separate dense regions of
+                data. Defaults to 1 if None.
+
+        Returns:
+            Spatial result object.
+        """
         ...
 
     @overload
@@ -501,7 +533,21 @@ class RPTree:
         ...
 
     def query_ann(self, query: ArrayLike, k: int, n_candidates: int, n_probes: int | None = None) -> SpatialResult:
-        """Find the approximate k nearest neighbors to the query point."""
+        """Find the approximate k nearest neighbors to the query point.
+
+        Args:
+            query: Query point (scalar, list, or array-like).
+            k: Number of nearest neighbors to return.
+            n_candidates: Number of candidates to check before returning the
+                result. Defaults to 2k if None.
+            n_probes: Number of subtrees to probe via stochastic search.
+                Additional probes improve recall and can improve speed when
+                the tree structure cannot cleanly separate dense regions of
+                data. Defaults to 1 if None.
+
+        Returns:
+            Spatial result object.
+        """
         ...
 
     @overload

@@ -358,7 +358,11 @@ macro_rules! knn_body {
                 .flatten()
                 .map(|(i, d)| (i as i64, d.to_f64().unwrap()))
                 .unzip();
-            Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, $k))
+            if n_queries == 1 {
+                Ok(PySpatialResult::from_single(indices, distances))
+            } else {
+                Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, $k))
+            }
         } else {
             let query_slice = &$queries_arr.as_slice_unchecked()[..$tree.dim];
             let results = $tree.query_knn(query_slice, $k);
@@ -381,7 +385,11 @@ macro_rules! ann_body {
                 .flatten()
                 .map(|(i, d)| (i as i64, d.to_f64().unwrap()))
                 .unzip();
-            Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, $k))
+            if n_queries == 1 {
+                Ok(PySpatialResult::from_single(indices, distances))
+            } else {
+                Ok(PySpatialResult::from_batch_knn(indices, distances, n_queries, $k))
+            }
         } else {
             let query_slice = &$queries_arr.as_slice_unchecked()[..$tree.dim];
             let results = match $n_probes {
@@ -398,18 +406,26 @@ macro_rules! ann_body {
 macro_rules! radius_body {
     ($tree:expr, $queries_arr:expr, $is_batch:expr, $rad:expr) => {{
         if $is_batch {
+            let n_queries = $queries_arr.shape().dims()[0];
             let results = $tree.query_radius_batch(&$queries_arr, $rad);
-            let mut all_indices = Vec::new();
-            let mut all_distances = Vec::new();
-            let mut counts = Vec::with_capacity(results.len());
-            for batch in results {
-                counts.push(batch.len() as i64);
-                for (i, d) in batch {
-                    all_indices.push(i as i64);
-                    all_distances.push(d.to_f64().unwrap());
+            if n_queries == 1 {
+                let batch = results.into_iter().next().unwrap_or_default();
+                let (indices, distances): (Vec<i64>, Vec<f64>) = batch.into_iter()
+                    .map(|(i, d)| (i as i64, d.to_f64().unwrap())).unzip();
+                Ok(PySpatialResult::from_single(indices, distances))
+            } else {
+                let mut all_indices = Vec::new();
+                let mut all_distances = Vec::new();
+                let mut counts = Vec::with_capacity(results.len());
+                for batch in results {
+                    counts.push(batch.len() as i64);
+                    for (i, d) in batch {
+                        all_indices.push(i as i64);
+                        all_distances.push(d.to_f64().unwrap());
+                    }
                 }
+                Ok(PySpatialResult::from_batch_radius(all_indices, all_distances, counts))
             }
-            Ok(PySpatialResult::from_batch_radius(all_indices, all_distances, counts))
         } else {
             let query_slice = &$queries_arr.as_slice_unchecked()[..$tree.dim];
             let results = $tree.query_radius(query_slice, $rad);

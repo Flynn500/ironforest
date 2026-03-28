@@ -1,4 +1,12 @@
-"""Type stubs for ironforest._core.random module."""
+"""Random number generation backed by a fast Rust PRNG.
+
+Example::
+
+    from ironforest._core import random
+
+    rng = random.Generator.from_seed(42)
+    samples = rng.normal(mu=0.0, sigma=1.0, shape=[100, 2])
+"""
 
 from typing import Sequence
 from ironforest._core import Array

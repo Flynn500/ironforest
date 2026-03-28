@@ -129,11 +129,15 @@ impl<'py> ArrayLike<'py> {
                 }
             }
             ArrayLike::Buffer(bound) => {
-                let buf = pyo3::buffer::PyBuffer::<f64>::get(&bound)
-                    .map_err(|_| PyTypeError::new_err(
+                if let Ok(buf) = pyo3::buffer::PyBuffer::<f64>::get(&bound) {
+                    NdArray::from_buffer(bound.py(), buf)
+                } else if let Ok(list) = bound.extract::<Vec<f64>>() {
+                    Ok(NdArray::from_vec(Shape::d1(list.len()), list))
+                } else {
+                    Err(PyTypeError::new_err(
                         "buffer contents are not compatible with f64"
-                    ))?;
-                NdArray::from_buffer(bound.py(), buf)
+                    ))
+                }
             }
             ArrayLike::Scalar(s) => Ok(NdArray::from_vec(Shape::scalar(), vec![s])),
             ArrayLike::Vec(v) => Ok(NdArray::from_vec(Shape::d1(v.len()), v)),
@@ -181,11 +185,17 @@ impl<'py> ArrayLike<'py> {
             ArrayLike::Buffer(bound) => {
                 if let Ok(buf) = pyo3::buffer::PyBuffer::<i64>::get(&bound) {
                     NdArray::from_buffer(bound.py(), buf)
-                } else {
-                    let buf = pyo3::buffer::PyBuffer::<f64>::get(&bound)?;
+                } else if let Ok(buf) = pyo3::buffer::PyBuffer::<f64>::get(&bound) {
                     let shape: Vec<usize> = buf.shape().iter().map(|&d| d as usize).collect();
                     let data: Vec<i64> = buf.to_vec(bound.py())?.into_iter().map(|x| x as i64).collect();
                     Ok(NdArray::from_vec(Shape::new(shape), data))
+                } else if let Ok(list) = bound.extract::<Vec<i64>>() {
+                    Ok(NdArray::from_vec(Shape::d1(list.len()), list))
+                } else if let Ok(list) = bound.extract::<Vec<f64>>() {
+                    let data: Vec<i64> = list.into_iter().map(|x| x as i64).collect();
+                    Ok(NdArray::from_vec(Shape::d1(data.len()), data))
+                } else {
+                    Err(PyTypeError::new_err("buffer contents are not compatible with i64 or f64"))
                 }
             }
             ArrayLike::Scalar(s) => Ok(NdArray::from_vec(Shape::new(vec![1]), vec![s as i64])),
@@ -331,12 +341,15 @@ impl<'py> ArrayLike<'py> {
             ArrayLike::Buffer(bound) => {
                 if let Ok(buf) = pyo3::buffer::PyBuffer::<f32>::get(&bound) {
                     NdArray::from_buffer(bound.py(), buf)
-                } else {
-                    let buf = pyo3::buffer::PyBuffer::<f64>::get(&bound)
-                        .map_err(|_| pyo3::exceptions::PyTypeError::new_err("buffer not compatible with f32 or f64"))?;
+                } else if let Ok(buf) = pyo3::buffer::PyBuffer::<f64>::get(&bound) {
                     let shape: Vec<usize> = buf.shape().iter().map(|&d| d as usize).collect();
                     let data: Vec<f32> = buf.to_vec(bound.py())?.into_iter().map(|x| x as f32).collect();
                     Ok(NdArray::from_vec(Shape::new(shape), data))
+                } else if let Ok(list) = bound.extract::<Vec<f64>>() {
+                    let data: Vec<f32> = list.into_iter().map(|x| x as f32).collect();
+                    Ok(NdArray::from_vec(Shape::d1(data.len()), data))
+                } else {
+                    Err(pyo3::exceptions::PyTypeError::new_err("buffer not compatible with f32 or f64"))
                 }
             }
             ArrayLike::Scalar(s) => Ok(NdArray::from_vec(Shape::scalar(), vec![s as f32])),
