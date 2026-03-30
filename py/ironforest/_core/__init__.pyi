@@ -448,6 +448,9 @@ class Array(Sequence[T_co], Generic[T_co]):
     def __releasebuffer__(self, buffer: memoryview) -> None: ...
 
 
+from .spatial import SpatialIndex as SpatialIndex
+from .spatial import TreeType as TreeType
+
 from . import linalg as linalg
 from . import stats as stats
 from . import random as random

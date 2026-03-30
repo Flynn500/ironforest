@@ -1,5 +1,5 @@
 use crate::{Generator, array::{NdArray, Shape}, projection::{ProjectionType, RandomProjection, random_projection::ProjectionDirection}, spatial::{HeapItem, common::{DistanceMetric, IronFloat}, spatial_tree::{ChildTraversal, TraversalPlan}}};
-use crate::spatial::queries::{KnnQuery, RadiusQuery, AnnQuery};
+use crate::spatial::queries::{KnnQuery, RadiusQuery, AnnQuery, KdeQuery};
 use crate::spatial::SpatialTree;
 use serde::{Deserialize, Serialize};
 
@@ -179,6 +179,8 @@ impl<T: IronFloat> KnnQuery for RPTree<T> {
 impl<T: IronFloat> RadiusQuery for RPTree<T> {
 
 }
+
+impl<T: IronFloat> KdeQuery for RPTree<T> {}
 
 impl<T: IronFloat> AnnQuery for RPTree<T> {
 

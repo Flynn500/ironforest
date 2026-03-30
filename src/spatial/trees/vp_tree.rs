@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use crate::{array::{NdArray, Shape}, spatial::common::{DistanceMetric, IronFloat}};
 use crate::random::Generator;
-use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery};
+use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery, AnnQuery};
 use crate::spatial::SpatialTree;
 use serde::{Deserialize, Serialize};
 
@@ -272,3 +272,4 @@ impl<T: IronFloat> SpatialTree for VPTree<T> {
 impl<T: IronFloat> KnnQuery for VPTree<T> {}
 impl<T: IronFloat> RadiusQuery for VPTree<T> {}
 impl<T: IronFloat> KdeQuery for VPTree<T> {}
+impl<T: IronFloat> AnnQuery for VPTree<T> {}

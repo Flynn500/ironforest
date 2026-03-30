@@ -11,7 +11,7 @@ Quickly find the k nearest neighbours in high-dimensional space using random pro
 ```python
 import ironforest as irn
 
-dims = 256
+dims = 64
 n = 100_000
 k = 10
 
@@ -20,17 +20,17 @@ gen = irn.random.Generator.from_seed(0)
 data = gen.uniform(0.0, 100.0, [n, dims])
 query_point = ([50.0] * dims)
 
-#Use random projections to reduce the dimensionality
-reducer, points = irn.spatial.ProjectionReducer.fit_transform(data, 50)
-tree = irn.spatial.KDTree.from_array(points, leaf_size=50)
+#create a spatial index object
+index = irn.SpatialIndex(data, tree_type="auto")
 
-#Use our reducer to convert the query
-query_point = reducer.transform(query_point)
-result = tree.query_knn(query_point, k=k)
+#the tree-type, automatically selected by our spatial index based on the dataset.
+print(index.tree_type)
+
+result = index.query_knn(query_point, k=k)
 
 #k nearest neighbours
-for result_idx, original_idx in enumerate(result.indices):
-    print(f"index: {original_idx}, dist: {result.distances[result_idx]}")
+for output_idx, original_idx in enumerate(result.indices):
+    print(f"index: {original_idx}, dist: {result.distances[output_idx]}")
 
 #print mean, meadian and max distances
 print(f"{result.mean():.2f}, {result.median():.2f}, {result.radius():.2f}")
@@ -54,8 +54,13 @@ The main things I need to finish before 1.0 are improving compatibility with the
 I'd also like to highlight the fact that before 1.0, serialization will not be gauranteed across versions. This is because the underlying trees are still going through a fair amount of iteration as we are still in the early stages of this library. 
 
 ## Spatial
-Spatial trees support kNN, radius, and KDE queries. All spatial trees support serialization via `save()` & `load()`, alternatively you can use pickle. Trees can be constructed and queried with our own array, numpy, pandas or polars. Anything that implements the python buffer protocol should be a valid input, although f64 values are only accepted at this point and NaN and non numeric types are not handled.
+Spatial trees support kNN, radius, and KDE queries, both single and batched.
 
+All spatial trees support serialization via `save()` & `load()`, alternatively you can use pickle. 
+
+Trees can be constructed and queried with our own array, numpy, pandas or polars. Anything that implements the python buffer protocol should be a valid input, although f64 values are only accepted at this point and NaN and non numeric types are not handled.
+
+- SpatialIndex - A wrapper for our other trees supporting dynamic insertion. This should be the default choice for most users, unless you specifically need a particular tree. By setting `tree_type` to auto, the index automatically selects the best type of tree based on your dataset.  
 - KDTree - axis-aligned splits, best for low-to-moderate dimensions
 - BallTree - pivot-based splits, handles higher dimensions well
 - VPTree - vantage-point splits, strong in general metric spaces
