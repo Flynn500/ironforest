@@ -2,6 +2,8 @@
 
 from ironforest._core import (
     Array,
+    SpatialIndex,
+    TreeType,
     linalg,
     ndutils,
     stats,
@@ -13,6 +15,8 @@ from . import models
 
 __all__ = [
     "Array",
+    "SpatialIndex",
+    "TreeType",
     "ndutils",
     "linalg",
     "stats",

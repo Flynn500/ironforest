@@ -2,7 +2,7 @@
 
 ### Added
 - Zero copy interop with python buffer protocol for contigious arrays.
-- 
+  
 ### Changed
 - aNN method has improved via the use of stochastic probes, controlled by n_probes. This improves both recall and query speed for most usecases.
 

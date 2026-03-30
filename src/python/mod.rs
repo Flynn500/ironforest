@@ -540,6 +540,7 @@ pub mod linalg;
 pub mod stats;
 pub mod random;
 pub mod spatial;
+pub mod spatial_index;
 pub mod tree_engine;
 
 pub use array::{PyArrayIter, PyIntArrayIter};
@@ -553,6 +554,8 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyGenerator>()?;
     m.add_class::<spatial::PyBallTree>()?;
     m.add_class::<spatial::PyKDTree>()?;
+    m.add_class::<spatial_index::PySpatialIndex>()?;
+    m.add_class::<spatial_index::PyTreeType>()?;
 
     let sys_modules = m.py().import("sys")?.getattr("modules")?;
 

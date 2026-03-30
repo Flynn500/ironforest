@@ -215,13 +215,13 @@ macro_rules! tree {
     };
 }
 
-enum SpatialInner<T64, T32> {
+pub(crate) enum SpatialInner<T64, T32> {
     F64(T64),
     F32(T32),
 }
 
 /// Returns a Python scalar for single queries, or a 1-D `PyArray` for batch queries.
-fn scalar_or_array(py: Python<'_>, values: Vec<f64>, is_single: bool) -> PyResult<Py<PyAny>> {
+pub(crate) fn scalar_or_array(py: Python<'_>, values: Vec<f64>, is_single: bool) -> PyResult<Py<PyAny>> {
     if is_single {
         Ok(values[0].into_pyobject(py)?.into_any().unbind())
     } else {
@@ -237,7 +237,7 @@ fn scalar_or_array(py: Python<'_>, values: Vec<f64>, is_single: bool) -> PyResul
 ///
 /// Trees reorder their input data during construction for cache efficiency. This function
 /// undoes that permutation so `data()` always returns rows in the order the user inserted them.
-fn get_tree_data(
+pub(crate) fn get_tree_data(
     tree_indices: &[usize],
     raw_data: &[f64],
     n_points: usize,
@@ -289,7 +289,7 @@ fn get_tree_data(
 // Parsing
 // =============================================================================
 
-fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
+pub(crate) fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
     match metric.to_lowercase().as_str() {
         "euclidean" => Ok(DistanceMetric::Euclidean),
         "manhattan" => Ok(DistanceMetric::Manhattan),
@@ -302,7 +302,7 @@ fn parse_metric(metric: &str) -> PyResult<DistanceMetric> {
     }
 }
 
-fn parse_kernel(kernel: &str) -> PyResult<KernelType> {
+pub(crate) fn parse_kernel(kernel: &str) -> PyResult<KernelType> {
     match kernel.to_lowercase().as_str() {
         "gaussian" => Ok(KernelType::Gaussian),
         "epanechnikov" => Ok(KernelType::Epanechnikov),
@@ -315,7 +315,7 @@ fn parse_kernel(kernel: &str) -> PyResult<KernelType> {
     }
 }
 
-fn parse_vantage_selection(selection: &str) -> PyResult<VantagePointSelection> {
+pub(crate) fn parse_vantage_selection(selection: &str) -> PyResult<VantagePointSelection> {
     match selection.to_lowercase().as_str() {
         "first" => Ok(VantagePointSelection::First),
         "random" => Ok(VantagePointSelection::Random),
@@ -327,7 +327,7 @@ fn parse_vantage_selection(selection: &str) -> PyResult<VantagePointSelection> {
     }
 }
 
-fn parse_projection_type(projection: &str, density: f64) -> PyResult<ProjectionType> {
+pub(crate) fn parse_projection_type(projection: &str, density: f64) -> PyResult<ProjectionType> {
     match projection.to_lowercase().as_str() {
         "gaussian" => Ok(ProjectionType::Gaussian),
         "sparse" => Ok(ProjectionType::Sparse(density)),
@@ -1193,7 +1193,7 @@ impl PyProjectionReducer {
 // =============================================================================
 
 /// Like `get_tree_data` but for f32-backed trees; upcasts to f64 for output since python is f64
-fn get_tree_data_f32(
+pub(crate) fn get_tree_data_f32(
     tree_indices: &[usize],
     raw_data: &[f32],
     n_points: usize,
@@ -1274,5 +1274,7 @@ pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAggTree>()?;
     m.add_class::<PyBruteForce>()?;
     m.add_class::<PyRPTree>()?;
+    m.add_class::<super::spatial_index::PySpatialIndex>()?;
+    m.add_class::<super::spatial_index::PyTreeType>()?;
     Ok(())
 }

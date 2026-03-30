@@ -1,5 +1,5 @@
 use crate::{array::NdArray, spatial::common::{DistanceMetric, IronFloat}};
-use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery};
+use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery, AnnQuery};
 use crate::spatial::SpatialTree;
 use serde::{Deserialize, Serialize};
 
@@ -87,3 +87,4 @@ impl<T: IronFloat> SpatialTree for BruteForce<T> {
 impl<T: IronFloat> KnnQuery for BruteForce<T> {}
 impl<T: IronFloat> RadiusQuery for BruteForce<T> {}
 impl<T: IronFloat> KdeQuery for BruteForce<T> {}
+impl<T: IronFloat> AnnQuery for BruteForce<T> {}

@@ -12,10 +12,10 @@ import numpy as np
 import pytest
 
 import ironforest as irn
+
 from ironforest.models import (
     DecisionTreeClassifier,
     DecisionTreeRegressor,
-    IsolationForest,
     KNNClassifier,
     KNNRegressor,
     LinearRegression,
