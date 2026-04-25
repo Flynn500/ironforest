@@ -740,6 +740,75 @@ class RPTree:
         """Return training-data rows at original indices, or all points if omitted."""
         ...
 
+class SpectralTree:
+    """Random Projection tree for efficient nearest neighbor queries.
+
+    An RP-tree recursively partitions data by projecting points onto random
+    directions and splitting at the median. This is more effective than
+    axis-aligned splits (KD-tree) in high-dimensional spaces.
+    """
+
+    @staticmethod
+    def from_array(
+        array: Array[float],
+        leaf_size: int = 20,
+        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
+        projection: Literal["gaussian", "sparse"] = "gaussian",
+        seed: Optional[int] = None,
+        preserve_array: bool = True
+    ) -> RPTree:
+        """Construct an RP-tree from a 2D array of points."""
+        ...
+
+    def __init__(
+        self,
+        data: ArrayLike,
+        leaf_size: int = 20,
+        metric: Literal["euclidean", "manhattan", "chebyshev", "cosine"] = "euclidean",
+        projection: Literal["gaussian", "sparse"] = "gaussian",
+        seed: Optional[int] = None,
+        copy: bool = True
+    ):
+        """Construct an RP-tree from array-like data."""
+        ...
+
+    @property
+    def dtype(self) -> str:
+        """The floating point precision of the tree ('float32' or 'float64')."""
+        ...
+
+    def query_radius(self, query: ArrayLike, radius: float) -> SpatialResult:
+        """Find all points within a given radius of the query point."""
+        ...
+
+    def query_knn(self, query: ArrayLike, k: int) -> SpatialResult:
+        """Find the k nearest neighbors to the query point."""
+        ...
+
+    def query_ann(self, query: ArrayLike, k: int, n_candidates: int, n_probes: int | None = None) -> SpatialResult:
+        """Find the approximate k nearest neighbors to the query point.
+
+        Args:
+            query: Query point (scalar, list, or array-like).
+            k: Number of nearest neighbors to return.
+            n_candidates: Number of candidates to check before returning the
+                result. Defaults to 2k if None.
+            n_probes: Number of subtrees to probe via stochastic search.
+                Additional probes improve recall and can improve speed when
+                the tree structure cannot cleanly separate dense regions of
+                data. Defaults to 1 if None.
+
+        Returns:
+            Spatial result object.
+        """
+        ...
+
+    @overload
+    def data(self, indices: ArrayLike) -> Array: ...
+    @overload
+    def data(self, indices: None = None) -> Array:
+        """Return training-data rows at original indices, or all points if omitted."""
+        ...
 
 class AggTree:
     """Aggregation tree for fast approximate kernel density estimation.

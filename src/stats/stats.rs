@@ -1,3 +1,4 @@
+use crate::IronFloat;
 use crate::array::ndarray::{NdArray};
 use crate::array::shape::Shape;
 impl NdArray<f64> {
@@ -114,6 +115,32 @@ impl NdArray<f64> {
 }
 
 impl<T> NdArray<T> {
+
+}
+
+impl<T: IronFloat> NdArray<T> {
+    pub fn column_means(&self) -> NdArray<f64> {
+        assert_eq!(self.ndim(), 2, "column_means() requires a 2D array");
+        let dims = self.shape().dims();
+        let n = dims[0];
+        let d = dims[1];
+
+        let mut sums = vec![0.0_f64; d];
+        for i in 0..n {
+            let row = self.row(i);
+            for (j, &v) in row.iter().enumerate() {
+                sums[j] += v.to_f64().unwrap_or(0.0);
+            }
+        }
+
+        let inv_n = 1.0 / n as f64;
+        for s in sums.iter_mut() {
+            *s *= inv_n;
+        }
+
+        NdArray::from_vec(Shape::new(vec![d]), sums)
+    }
+
     pub fn mode(&self) -> T where T: PartialEq + Copy {
         assert!(!self.is_empty(), "mode() called on empty array");
 

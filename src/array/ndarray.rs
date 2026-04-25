@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use pyo3::{Py, PyAny, Python};
 use pyo3::buffer::PyBuffer;
+use crate::IronFloat;
 use crate::array::shape::Shape;
 use crate::array::storage::Storage;
 use crate::array::strided_iter::StridedIter;
@@ -413,5 +414,17 @@ impl<T: Default + Clone> NdArray<T> {
     pub fn zeros(shape: Shape) -> Self {
         let storage = Storage::zeros(shape.size());
         Self::new(shape, storage)
+    }
+}
+
+impl<T: IronFloat> NdArray<T> {
+    /// Cast to f64. Returns an owned NdArray<f64> with the same shape.
+    pub fn as_f64(&self) -> NdArray<f64> {
+        let dims = self.shape().dims().to_vec();
+        let slice = self.as_slice_unchecked();
+        let out: Vec<f64> = slice.iter()
+            .map(|v| v.to_f64().unwrap_or(0.0))
+            .collect();
+        NdArray::from_vec(Shape::new(dims), out)
     }
 }

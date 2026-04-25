@@ -541,7 +541,6 @@ pub mod stats;
 pub mod random;
 pub mod spatial;
 pub mod spatial_index;
-pub mod tree_engine;
 
 pub use array::{PyArrayIter, PyIntArrayIter};
 pub use random::PyGenerator;
@@ -583,8 +582,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     spatial::register_module(&spatial_module)?;
     m.add_submodule(&spatial_module)?;
     sys_modules.set_item("ironforest._core.spatial", &spatial_module)?;
-
-    tree_engine::register_classes(m)?;
 
     Ok(())
 }

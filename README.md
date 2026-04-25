@@ -64,7 +64,8 @@ Trees can be constructed and queried with our own array, numpy, pandas or polars
 - KDTree - axis-aligned splits, best for low-to-moderate dimensions
 - BallTree - pivot-based splits, handles higher dimensions well
 - VPTree - vantage-point splits, strong in general metric spaces
-- RPTree - random-projection splits, strong in high dimensions with low intrinsic dimensionality. 
+- RPTree - random-projection splits, strong in high dimensions with low intrinsic dimensionality.
+- Spectral Tree - splits data along projections derived from the Fiedler vector of a kNN graph. Slower build times than RPTree but generally better recall for aNN. 
 - MTree (SOON) - pivot-based splits, supports dynamic insertion at the cost of query speed.
 - AggTree - approximate KDE via aggregated nodes, tunable accuracy via atol
 - ProjectionReducer - use random projections to reduce dimensionality for more effecient spatial queries.
@@ -88,9 +89,9 @@ KDTree is generally seen as the baseline spatial indexing tree. Our other trees 
 ## Models
 IronForest also includes a variety of models. Many of these leverage our spatial trees or other parts of our exsiting infrastructure but they aren't our core focus.
 
-- Decision Trees
-- Random Forest
-- Isolation Forest
+- Decision Trees (DEPRECATED)
+- Random Forest (DEPRECATED)
+- Isolation Forest (DEPRECATED)
 - Linear Regression
 - Local Regression
 - KNN Regression & Classification

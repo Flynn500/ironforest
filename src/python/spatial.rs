@@ -4,8 +4,7 @@ use pyo3::types::PyAny;
 use crate::Generator;
 use crate::array::{NdArray, Shape};
 use crate::projection::{ProjectionReducer, ProjectionType};
-use crate::spatial::trees::{AggTree, BallTree, BruteForce, KDTree, RPTree, VPTree, VantagePointSelection,
-    KDTree32, BallTree32, VPTree32, BruteForce32, RPTree32, AggTree32};
+use crate::spatial::trees::{AggTree, AggTree32, BallTree, BallTree32, BruteForce, BruteForce32, KDTree, KDTree32, RPTree, RPTree32, SpectralTree, SpectralTree32, VPTree, VPTree32, VantagePointSelection};
 use crate::spatial::{DistanceMetric, KernelType, SpatialTree};
 use crate::spatial::queries::{KnnQuery, RadiusQuery, KdeQuery, AnnQuery};
 use super::{PyArray, ArrayData, ArrayLike};
@@ -612,22 +611,26 @@ impl_data_query!(PyKDTree);
 impl_data_query!(PyVPTree);
 impl_data_query!(PyBruteForce);
 impl_data_query!(PyRPTree);
+impl_data_query!(PySpectralTree);
 
 impl_ann_query!(PyBallTree);
 impl_ann_query!(PyKDTree);
 impl_ann_query!(PyRPTree);
+impl_ann_query!(PySpectralTree);
 
 impl_knn_query!(PyBallTree);
 impl_knn_query!(PyKDTree);
 impl_knn_query!(PyVPTree);
 impl_knn_query!(PyBruteForce);
 impl_knn_query!(PyRPTree);
+impl_knn_query!(PySpectralTree);
 
 impl_radius_query!(PyBallTree);
 impl_radius_query!(PyKDTree);
 impl_radius_query!(PyVPTree);
 impl_radius_query!(PyBruteForce);
 impl_radius_query!(PyRPTree);
+impl_radius_query!(PySpectralTree);
 
 impl_kde_query!(PyBallTree);
 impl_kde_query!(PyKDTree);
@@ -639,6 +642,7 @@ impl_dtype_getter!(PyKDTree);
 impl_dtype_getter!(PyVPTree);
 impl_dtype_getter!(PyBruteForce);
 impl_dtype_getter!(PyRPTree);
+impl_dtype_getter!(PySpectralTree);
 impl_dtype_getter!(PyAggTree);
 
 
@@ -671,7 +675,7 @@ macro_rules! impl_spatial_serialization {
                 Ok(PyBytes::new(py, &bytes))
             }
 
-            fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<(PyObject, PyObject, PyObject)> {
+            fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<(Py<PyAny>, Py<PyAny>, Py<PyAny>)> {
                 let state = self.__getstate__(py)?;
                 let cls = py.get_type::<$py_type>();
                 let reconstruct = py.import("ironforest._core.spatial")?.getattr("_reconstruct")?;
@@ -748,7 +752,7 @@ macro_rules! impl_simple_serialization {
                 Ok(PyBytes::new(py, &bytes))
             }
 
-            fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<(PyObject, PyObject, PyObject)> {
+            fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<(Py<PyAny>, Py<PyAny>, Py<PyAny>)> {
                 let state = self.__getstate__(py)?;
                 let cls = py.get_type::<$py_type>();
                 let reconstruct = py.import("ironforest._core.spatial")?.getattr("_reconstruct")?;
@@ -795,6 +799,7 @@ impl_spatial_serialization!(PyVPTree, VPTree, VPTree32, PyVPTree);
 impl_spatial_serialization!(PyBruteForce, BruteForce, BruteForce32, PyBruteForce);
 impl_spatial_serialization!(PyAggTree, AggTree, AggTree32, PyAggTree);
 impl_spatial_serialization!(PyRPTree, RPTree, RPTree32, PyRPTree);
+impl_spatial_serialization!(PySpectralTree, SpectralTree, SpectralTree32, PySpectralTree);
 impl_simple_serialization!(PyProjectionReducer, ProjectionReducer, PyProjectionReducer);
 
 // =============================================================================
@@ -954,6 +959,43 @@ impl PyRPTree {
             let data = if copy { array.into_ndarray()?.to_contiguous() } else { array.into_ndarray()? };
             let projection_method = parse_projection_type(projection.unwrap_or("gaussian"), 1.0 / f64::sqrt(data.ndim() as f64))?;
             Ok(PyRPTree { inner: Some(SpatialInner::F64(RPTree::new(data, leaf_size, metric, projection_method, seed))) })
+        }
+    }
+}
+
+#[pyclass(name = "SpectralTree", module = "ironforest._core.spatial")]
+pub struct PySpectralTree {
+    inner: Option<SpatialInner<SpectralTree, SpectralTree32>>,
+}
+
+#[pymethods]
+impl PySpectralTree {
+    #[staticmethod]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", k_local=10, seed=0, preserve_array=true))]
+    fn from_array(mut array: PyRefMut<'_, PyArray>, leaf_size: Option<usize>, metric: Option<&str>, k_local: usize, seed: u64, preserve_array: bool) -> PyResult<Self> {
+        let leaf_size = leaf_size.unwrap_or(20);
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        if matches!(array.inner, ArrayData::Float32(_)) {
+            let data = if preserve_array { array.as_view_float32()? } else { array.take_float32()?.to_contiguous() };
+            Ok(PySpectralTree { inner: Some(SpatialInner::F32(SpectralTree32::new(data, leaf_size, metric, k_local, seed))) })
+        } else {
+            let data = if preserve_array { array.as_view_float()? } else { array.take_float()?.to_contiguous() };
+            Ok(PySpectralTree { inner: Some(SpatialInner::F64(SpectralTree::new(data, leaf_size, metric, k_local, seed))) })
+        }
+    }
+
+    #[new]
+    #[pyo3(signature = (array, leaf_size=20, metric="euclidean", k_local=10, seed=0, copy=true))]
+    fn __init__(array: ArrayLike, leaf_size: Option<usize>, metric: Option<&str>, k_local: usize, seed: u64, copy: bool) -> PyResult<Self> {
+        let leaf_size = leaf_size.unwrap_or(20);
+        let metric = parse_metric(metric.unwrap_or("euclidean"))?;
+        let use_f32 = array.is_f32();
+        if use_f32 {
+            let data = if copy { array.into_f32_ndarray()?.to_contiguous() } else { array.into_f32_ndarray()? };
+            Ok(PySpectralTree { inner: Some(SpatialInner::F32(SpectralTree32::new(data, leaf_size, metric, k_local, seed))) })
+        } else {
+            let data = if copy { array.into_ndarray()?.to_contiguous() } else { array.into_ndarray()? };
+            Ok(PySpectralTree { inner: Some(SpatialInner::F64(SpectralTree::new(data, leaf_size, metric, k_local, seed))) })
         }
     }
 }
@@ -1241,7 +1283,7 @@ pub(crate) fn get_tree_data_f32(
 
 /// Pickle helper: creates an uninitialized instance for `__setstate__` to populate.
 #[pyfunction]
-fn _reconstruct(py: Python<'_>, cls: &Bound<'_, PyAny>) -> PyResult<PyObject> {
+fn _reconstruct(py: Python<'_>, cls: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     // Determine which type to create with inner: None, bypassing __init__
     if cls.eq(py.get_type::<PyKDTree>())? {
         Ok(Py::new(py, PyKDTree { inner: None })?.into_any())
@@ -1253,6 +1295,8 @@ fn _reconstruct(py: Python<'_>, cls: &Bound<'_, PyAny>) -> PyResult<PyObject> {
         Ok(Py::new(py, PyBruteForce { inner: None })?.into_any())
     } else if cls.eq(py.get_type::<PyRPTree>())? {
         Ok(Py::new(py, PyRPTree { inner: None })?.into_any())
+    } else if cls.eq(py.get_type::<PySpectralTree   >())? {
+        Ok(Py::new(py, PySpectralTree { inner: None })?.into_any())
     } else if cls.eq(py.get_type::<PyAggTree>())? {
         Ok(Py::new(py, PyAggTree { inner: None })?.into_any())
     } else if cls.eq(py.get_type::<PyProjectionReducer>())? {
@@ -1274,6 +1318,7 @@ pub fn register_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAggTree>()?;
     m.add_class::<PyBruteForce>()?;
     m.add_class::<PyRPTree>()?;
+    m.add_class::<PySpectralTree>()?;
     m.add_class::<super::spatial_index::PySpatialIndex>()?;
     m.add_class::<super::spatial_index::PyTreeType>()?;
     Ok(())

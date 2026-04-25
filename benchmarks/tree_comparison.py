@@ -6,15 +6,16 @@ import matplotlib.pyplot as plt
 import math
 
 TREES = {
-    "KDTree":   lambda d, ls: spatial.KDTree.from_array(d, leaf_size=ls),
-    "BallTree": lambda d, ls: spatial.BallTree.from_array(d, leaf_size=ls),
-    "VPTree":   lambda d, ls: spatial.VPTree.from_array(d, leaf_size=ls),
+    #"KDTree":   lambda d, ls: spatial.KDTree.from_array(d, leaf_size=ls),
+    #"BallTree": lambda d, ls: spatial.BallTree.from_array(d, leaf_size=ls),
+    #"VPTree":   lambda d, ls: spatial.VPTree.from_array(d, leaf_size=ls),
     "RPTree":   lambda d, ls: spatial.RPTree.from_array(d, leaf_size=ls, projection="sparse"),
-    "BruteForce":    lambda d, ls: spatial.BruteForce.from_array(d)
+    "SpectralTree":   lambda d, ls: spatial.SpectralTree.from_array(d, leaf_size=ls),
+    #"BruteForce":    lambda d, ls: spatial.BruteForce.from_array(d)
 }
 
-DIMS = [2, 4, 8, 16, 32, 64, 128, 256, 512]
-INTRINISC_DIMS = [2, 2, 4, 4, 8, 8, 16, 16, 32, 64]
+DIMS = [2, 8, 16, 64]
+INTRINISC_DIMS = [2, 8, 16, 64]
 
 
 def time_call(fn, repeat=3):
@@ -68,7 +69,7 @@ def plot_results(results, dims, tree_names, title="kNN Query Time vs Dimensions"
     plt.savefig("tree_comparison.png", dpi=150)
 
 
-def run_benchmark(n=50_000, k=10, leaf_size=100, n_queries=1_000):
+def run_benchmark(n=50_000, k=10, leaf_size=200, n_queries=1_000):
     rng = np.random.default_rng(0)
     results = {}
     n_clusters = 20
@@ -100,9 +101,7 @@ def run_benchmark(n=50_000, k=10, leaf_size=100, n_queries=1_000):
         for name, builder in TREES.items():
             try:
                 tree  = builder(irn_data, leaf_size)
-                if name == "RPTree":
-                    knn_t = time_call(lambda: tree.query_ann(queries, k, 1000))
-                else: knn_t = time_call(lambda: tree.query_knn(queries, k))
+                knn_t = time_call(lambda: tree.query_knn(queries, k))
                 results[dim][name] = knn_t
             except Exception as e:
                 print(f"    {name} failed: {e}")

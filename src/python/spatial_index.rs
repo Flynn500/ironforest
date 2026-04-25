@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
 use pyo3::types::PyAny;
 
+use crate::{Generator, IronFloat};
 use crate::array::{NdArray, Shape};
 use crate::spatial::DistanceMetric;
 use crate::spatial::spatial_index::{SpatialIndex, TreeType, QueryInput, QueryResult};
@@ -41,23 +42,51 @@ fn parse_tree_type(s: &str) -> PyResult<PyTreeType> {
     }
 }
 
-fn resolve_tree_type(tt: PyTreeType) -> TreeType {
+fn auto_select_tree<T: IronFloat>(
+    data: &NdArray<T>,
+    rng: &mut Generator,
+) -> TreeType {
+    let dims = data.shape().dims();
+    let n = dims[0];
+    let d = dims[1];
+
+    if n < 1000 {
+        return TreeType::BruteForce;
+    }
+    if d <= 16 {
+        return TreeType::KDTree;
+    }
+    if d > 512 {
+        return TreeType::BruteForce;
+    }
+
+    let id = match data.intrinsic_dim(0.95, 2000, rng) {
+        Ok(id) => id,
+        Err(_) => return TreeType::KDTree,
+    };
+
+    if (id as f64) / (d as f64) < 0.3 {
+        return TreeType::RPTree;
+    }
+    if id <= 20 {
+        return TreeType::BallTree;
+    }
+
+    TreeType::VPTree
+}
+
+fn resolve_tree_type<T: IronFloat>(
+    tt: PyTreeType,
+    data: &NdArray<T>,
+    rng: &mut Generator,
+) -> TreeType {
     match tt {
-        PyTreeType::Auto | PyTreeType::KDTree => TreeType::KDTree,
+        PyTreeType::Auto => auto_select_tree(data, rng),
+        PyTreeType::KDTree => TreeType::KDTree,
         PyTreeType::BallTree => TreeType::BallTree,
         PyTreeType::VPTree => TreeType::VPTree,
         PyTreeType::RPTree => TreeType::RPTree,
         PyTreeType::BruteForce => TreeType::BruteForce,
-    }
-}
-
-fn tree_type_to_py(tt: TreeType) -> PyTreeType {
-    match tt {
-        TreeType::KDTree => PyTreeType::KDTree,
-        TreeType::BallTree => PyTreeType::BallTree,
-        TreeType::VPTree => PyTreeType::VPTree,
-        TreeType::RPTree => PyTreeType::RPTree,
-        TreeType::BruteForce => PyTreeType::BruteForce,
     }
 }
 
@@ -107,15 +136,16 @@ impl PySpatialIndex {
         selection: &str,
         copy: bool,
     ) -> PyResult<Self> {
-        let parsed_type = resolve_tree_type(parse_tree_type(tree_type)?);
         let metric = parse_metric(metric)?;
         let vp_selection = parse_vantage_selection(selection)?;
         let use_f32 = data.is_f32();
+        let mut rng = Generator::from_seed(seed);
 
         if use_f32 {
             let arr = if copy { data.into_f32_ndarray()?.to_contiguous() } else { data.into_f32_ndarray()? };
             let dim = arr.shape().dims()[1];
             let projection_type = parse_projection_type(projection, 1.0 / f64::sqrt(dim as f64))?;
+            let parsed_type = resolve_tree_type(parse_tree_type(tree_type)?, &arr, &mut rng);
             Ok(PySpatialIndex {
                 inner: SpatialIndex::new_f32(arr, parsed_type, leaf_size, metric, rebuild_threshold, seed, projection_type, vp_selection),
             })
@@ -123,6 +153,7 @@ impl PySpatialIndex {
             let arr = if copy { data.into_ndarray()?.to_contiguous() } else { data.into_ndarray()? };
             let dim = arr.shape().dims()[1];
             let projection_type = parse_projection_type(projection, 1.0 / f64::sqrt(dim as f64))?;
+            let parsed_type = resolve_tree_type(parse_tree_type(tree_type)?, &arr, &mut rng);
             Ok(PySpatialIndex {
                 inner: SpatialIndex::new_f64(arr, parsed_type, leaf_size, metric, rebuild_threshold, seed, projection_type, vp_selection),
             })
