@@ -6,7 +6,7 @@ k = 10
 
 #Randomly generate data
 gen = irn.random.Generator.from_seed(0)
-data = gen.uniform(0.0, 100.0, [n, dims])
+data = gen.uniform(0.0, 100.0, [n, dims]).astype("f32")
 query_point = ([50.0] * dims)
 
 #create a spatial index object

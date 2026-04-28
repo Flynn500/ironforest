@@ -10,13 +10,6 @@ import pytest
 
 import ironforest as irn
 from ironforest import ndutils, linalg, spatial
-from ironforest.models import (
-    DecisionTreeClassifier,
-    DecisionTreeRegressor,
-    RandomForestClassifier,
-    RandomForestRegressor,
-    IsolationForest,
-)
 
 # ---------------------------------------------------------------------------
 # 1. Array creation with dtype="float32"
@@ -208,54 +201,6 @@ def test_spatial_tree_f32_knn_query(name, constructor):
     assert result.indices.shape[0] == 5
     assert result.indices.shape[1] == 3
 
-# ---------------------------------------------------------------------------
-# 9. Decision tree models accept f32 input (via astype guard)
-# ---------------------------------------------------------------------------
-
-def _make_clf_data():
-    X = RNG.random((100, 4)).astype(np.float32)
-    y = (X[:, 0] > 0.5).astype(np.float64)
-    return X, y
-
-def _make_reg_data():
-    X = RNG.random((100, 4)).astype(np.float32)
-    y = X[:, 0].astype(np.float64)
-    return X, y
-
-def test_decision_tree_classifier_f32_input():
-    X, y = _make_clf_data()
-    clf = DecisionTreeClassifier(max_depth=3)
-    clf.fit(X, y)
-    preds = clf.predict(X)
-    assert preds is not None
-
-def test_decision_tree_regressor_f32_input():
-    X, y = _make_reg_data()
-    reg = DecisionTreeRegressor(max_depth=3)
-    reg.fit(X, y)
-    preds = reg.predict(X)
-    assert preds is not None
-
-def test_random_forest_classifier_f32_input():
-    X, y = _make_clf_data()
-    clf = RandomForestClassifier(n_estimators=5, max_depth=3)
-    clf.fit(X, y)
-    preds = clf.predict(X)
-    assert preds is not None
-
-def test_random_forest_regressor_f32_input():
-    X, y = _make_reg_data()
-    reg = RandomForestRegressor(n_estimators=5, max_depth=3)
-    reg.fit(X, y)
-    preds = reg.predict(X)
-    assert preds is not None
-
-def test_isolation_forest_f32_input():
-    X = RNG.random((100, 4)).astype(np.float32)
-    iso = IsolationForest(n_estimators=10)
-    iso.fit(X)
-    scores = iso.score_samples(X)
-    assert scores is not None
 
 # ---------------------------------------------------------------------------
 # 10. Arithmetic dtype rules

@@ -1,3 +1,11 @@
+## 0.7
+
+### Added
+- `SpatialIndex` a toplevel wrapper for spatial trees with automatic tree selection based on the dataset as well as dynamic insertion.
+  
+### Removed
+- Decision tree, isolation forest and random forest. Not what this library will be focused on going forwards. There will be future models that achieve some of their functionality that leverage spatial trees, but I want to keep our scope narrower than broad ML.
+
 ## 0.6
 
 ### Added

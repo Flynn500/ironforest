@@ -114,8 +114,29 @@ impl NdArray<f64> {
     }
 }
 
-impl<T> NdArray<T> {
+impl<T> NdArray<T> { 
+    pub fn mode(&self) -> T where T: PartialEq + Copy {
+        assert!(!self.is_empty(), "mode() called on empty array");
 
+        let slice = self.as_slice_unchecked();
+        let mut best_val = slice[0];
+        let mut best_count = 0usize;
+
+        for &val in slice {
+            let mut count = 0usize;
+            for &other in slice {
+                if val == other {
+                    count += 1;
+                }
+            }
+            if count > best_count {
+                best_count = count;
+                best_val = val;
+            }
+        }
+
+        best_val
+    }
 }
 
 impl<T: IronFloat> NdArray<T> {
@@ -141,26 +162,5 @@ impl<T: IronFloat> NdArray<T> {
         NdArray::from_vec(Shape::new(vec![d]), sums)
     }
 
-    pub fn mode(&self) -> T where T: PartialEq + Copy {
-        assert!(!self.is_empty(), "mode() called on empty array");
 
-        let slice = self.as_slice_unchecked();
-        let mut best_val = slice[0];
-        let mut best_count = 0usize;
-
-        for &val in slice {
-            let mut count = 0usize;
-            for &other in slice {
-                if val == other {
-                    count += 1;
-                }
-            }
-            if count > best_count {
-                best_count = count;
-                best_val = val;
-            }
-        }
-
-        best_val
-    }
 }

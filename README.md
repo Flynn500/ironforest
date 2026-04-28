@@ -1,9 +1,6 @@
 # IronForest
 Fast spatial indexing and approximate density estimation for Python, powered by Rust. Zero external dependencies.
 
-### Deprecation Note
-Decision Tree, Isolation Forest & Random Forest are deprecated for future releases. They do not sit in line with the core idea of this library and position us as a "scikit-learn alternative" which is not the space we'd like to be. The core focus will be on spatial data structures and models going forwards.
-
 ## Quickstart
 
 Quickly find the k nearest neighbours in high-dimensional space using random projections and our KDTree.
